@@ -27,7 +27,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/reservas
-router.post('/', requirePerm('vender_lotes'), async (req, res) => {
+router.post('/', requirePerm('vender'), async (req, res) => {
   const empId = req.user.tipo === 'master' ? req.body.empresaId : req.user.empresaId;
   const { loteId, proyectoId, etapaId, tipo, compradorNombre, compradorApellidos, compradorDni,
           compradorTelefono, compradorCorreo, precio, inicial, cuotas, descuento, notas } = req.body;
@@ -60,7 +60,7 @@ router.post('/', requirePerm('vender_lotes'), async (req, res) => {
 });
 
 // PUT /api/reservas/:id
-router.put('/:id', requirePerm('vender_lotes'), async (req, res) => {
+router.put('/:id', requirePerm('vender'), async (req, res) => {
   const empId = req.user.tipo === 'master' ? null : req.user.empresaId;
   const { compradorNombre, compradorApellidos, compradorDni, compradorTelefono, compradorCorreo,
           precio, inicial, cuotas, descuento, notas, documentosGenerados } = req.body;
@@ -84,7 +84,7 @@ router.put('/:id', requirePerm('vender_lotes'), async (req, res) => {
 });
 
 // DELETE /api/reservas/:id — cancelar reserva y liberar lote
-router.delete('/:id', requirePerm('vender_lotes'), async (req, res) => {
+router.delete('/:id', requirePerm('vender'), async (req, res) => {
   const empId = req.user.tipo === 'master' ? null : req.user.empresaId;
   const client = await pool.connect();
   try {

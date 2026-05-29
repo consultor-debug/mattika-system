@@ -36,7 +36,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/lotes
-router.post('/', requirePerm('admin_lotes'), async (req, res) => {
+router.post('/', requirePerm('editar_lotes'), async (req, res) => {
   const empId = req.user.tipo === 'master' ? req.body.empresaId : req.user.empresaId;
   const { proyectoId, etapaId, codigo, manzana, numero, area, frente, fondo, lDer, lIzq, precio, estado, tipologia, orientacion, vertices } = req.body;
   const id = uuidv4();
@@ -54,7 +54,7 @@ router.post('/', requirePerm('admin_lotes'), async (req, res) => {
 });
 
 // POST /api/lotes/bulk — importación masiva desde Excel
-router.post('/bulk', requirePerm('admin_lotes'), async (req, res) => {
+router.post('/bulk', requirePerm('editar_lotes'), async (req, res) => {
   const empId = req.user.tipo === 'master' ? req.body.empresaId : req.user.empresaId;
   const { lotes, proyectoId, etapaId, modo = 'merge' } = req.body;
   if (!Array.isArray(lotes)) return res.status(400).json({ error: 'lotes debe ser un array' });
@@ -102,7 +102,7 @@ router.post('/bulk', requirePerm('admin_lotes'), async (req, res) => {
 });
 
 // PUT /api/lotes/:id
-router.put('/:id', requirePerm('admin_lotes'), async (req, res) => {
+router.put('/:id', requirePerm('editar_lotes'), async (req, res) => {
   const empId = req.user.tipo === 'master' ? null : req.user.empresaId;
   const { manzana, numero, area, frente, fondo, lDer, lIzq, precio, estado, tipologia, orientacion, vertices, codigo } = req.body;
   const r = await pool.query(
@@ -136,7 +136,7 @@ router.put('/:id/vertices', async (req, res) => {
 });
 
 // DELETE /api/lotes/:id
-router.delete('/:id', requirePerm('admin_lotes'), async (req, res) => {
+router.delete('/:id', requirePerm('editar_lotes'), async (req, res) => {
   const empId = req.user.tipo === 'master' ? null : req.user.empresaId;
   await pool.query(`DELETE FROM lotes WHERE id = $1 AND ($2::varchar IS NULL OR empresa_id = $2)`, [req.params.id, empId]);
   res.json({ ok: true });

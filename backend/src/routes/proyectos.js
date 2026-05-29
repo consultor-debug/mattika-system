@@ -23,7 +23,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/proyectos
-router.post('/', requirePerm('admin_proyectos'), async (req, res) => {
+router.post('/', requirePerm('gestionar_proyectos'), async (req, res) => {
   const { nombre, ubicacion, descripcion, estado, fechaInicio, fechaEntrega } = req.body;
   const empId = req.user.tipo === 'master' ? req.body.empresaId : req.user.empresaId;
   if (!nombre || !empId) return res.status(400).json({ error: 'nombre y empresaId requeridos' });
@@ -37,7 +37,7 @@ router.post('/', requirePerm('admin_proyectos'), async (req, res) => {
 });
 
 // PUT /api/proyectos/:id
-router.put('/:id', requirePerm('admin_proyectos'), async (req, res) => {
+router.put('/:id', requirePerm('gestionar_proyectos'), async (req, res) => {
   const empId = scope(req);
   const { nombre, ubicacion, descripcion, estado, fechaInicio, fechaEntrega } = req.body;
   const r = await pool.query(
@@ -53,7 +53,7 @@ router.put('/:id', requirePerm('admin_proyectos'), async (req, res) => {
 });
 
 // DELETE /api/proyectos/:id
-router.delete('/:id', requirePerm('admin_proyectos'), async (req, res) => {
+router.delete('/:id', requirePerm('gestionar_proyectos'), async (req, res) => {
   const empId = scope(req);
   await pool.query(`DELETE FROM proyectos WHERE id = $1 AND ($2::varchar IS NULL OR empresa_id = $2)`, [req.params.id, empId]);
   res.json({ ok: true });
@@ -62,7 +62,7 @@ router.delete('/:id', requirePerm('admin_proyectos'), async (req, res) => {
 // ── Etapas ────────────────────────────────────────────────────
 
 // POST /api/proyectos/:proyectoId/etapas
-router.post('/:proyectoId/etapas', requirePerm('admin_proyectos'), async (req, res) => {
+router.post('/:proyectoId/etapas', requirePerm('gestionar_proyectos'), async (req, res) => {
   const empId = req.user.tipo === 'master' ? req.body.empresaId : req.user.empresaId;
   const { nombre, estado, lotes, fechaInicio, fechaEntrega } = req.body;
   const id = `${req.params.proyectoId}-${nombre.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}-${Date.now().toString(36)}`;
@@ -75,7 +75,7 @@ router.post('/:proyectoId/etapas', requirePerm('admin_proyectos'), async (req, r
 });
 
 // PUT /api/proyectos/:proyectoId/etapas/:etapaId
-router.put('/:proyectoId/etapas/:etapaId', requirePerm('admin_proyectos'), async (req, res) => {
+router.put('/:proyectoId/etapas/:etapaId', requirePerm('gestionar_proyectos'), async (req, res) => {
   const { nombre, estado, lotes, fechaInicio, fechaEntrega, planoImagen, planoAlineacion } = req.body;
   const r = await pool.query(
     `UPDATE etapas SET
@@ -92,7 +92,7 @@ router.put('/:proyectoId/etapas/:etapaId', requirePerm('admin_proyectos'), async
 });
 
 // DELETE /api/proyectos/:proyectoId/etapas/:etapaId
-router.delete('/:proyectoId/etapas/:etapaId', requirePerm('admin_proyectos'), async (req, res) => {
+router.delete('/:proyectoId/etapas/:etapaId', requirePerm('gestionar_proyectos'), async (req, res) => {
   await pool.query(`DELETE FROM etapas WHERE id = $1 AND proyecto_id = $2`, [req.params.etapaId, req.params.proyectoId]);
   res.json({ ok: true });
 });

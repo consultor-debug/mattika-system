@@ -52,16 +52,16 @@ async function seed() {
     `);
     console.log('✅ Etapas seeded');
 
-    // Permisos por defecto
+    // Permisos por defecto — mismas claves que auth.jsx del frontend
     const permisosAdmin = {
-      vender_lotes: true, ver_pagos: true, registrar_pagos: true,
-      subir_planos: true, admin_lotes: true, admin_proyectos: true,
+      vender: true, ver_pagos: true, registrar_pagos: true,
+      editar_plano: true, editar_lotes: true, gestionar_proyectos: true,
       editar_condiciones: true, gestionar_usuarios: true,
       editar_plantillas: true, superusuario: true
     };
     const permisosAsesor = {
-      vender_lotes: true, ver_pagos: true, registrar_pagos: false,
-      subir_planos: false, admin_lotes: false, admin_proyectos: false,
+      vender: true, ver_pagos: true, registrar_pagos: false,
+      editar_plano: false, editar_lotes: false, gestionar_proyectos: false,
       editar_condiciones: false, gestionar_usuarios: false,
       editar_plantillas: false, superusuario: false
     };
@@ -82,11 +82,11 @@ async function seed() {
       `, [u.id, u.empresa_id, u.nombre, u.username, u.hash, u.rol, u.permisos]);
     }
 
-    // Master user (no empresa_id)
+    // Master user (empresa_id NULL — usar ON CONFLICT (id) porque UNIQUE(empresa_id, username) no aplica con NULLs)
     await client.query(`
       INSERT INTO usuarios (id, empresa_id, nombre, username, password_hash, rol, permisos, tipo)
       VALUES ('mattika-owner', NULL, 'Owner Mattika', 'owner', $1, 'Master', $2, 'master')
-      ON CONFLICT DO NOTHING
+      ON CONFLICT (id) DO UPDATE SET password_hash = EXCLUDED.password_hash
     `, [hMattika, permisosAdmin]);
 
     console.log('✅ Usuarios seeded (contraseñas: lumina2026 / golden2026 / mattika2026)');
