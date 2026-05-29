@@ -1,12 +1,35 @@
 // data-store.jsx — Capa de datos que UNIFICA el ciclo comercial.
 // ════════════════════════════════════════════════════════════════
-// Reserva (apartar/vender un lote) → Cliente → Cronograma de Pagos.
-//
-// Las reservas se guardan por alcance (empresa·proyecto·etapa) desde el Plano.
-// Aquí las reunimos a nivel EMPRESA para alimentar las pantallas de Clientes y
-// Pagos con datos reales, en lugar de listas de ejemplo desconectadas.
 
 const RESERVAS_PREFIX = 'mattika.reservas.v1.';
+
+// ── API client ──────────────────────────────────────────────────
+function getToken() {
+  try {
+    const s = JSON.parse(localStorage.getItem('mattika.sesion.v1') || 'null');
+    return s?.token || null;
+  } catch (e) { return null; }
+}
+
+async function apiClient(path, opts = {}) {
+  const base = window.MATTIKA_API;
+  if (!base) return null;
+  const token = getToken();
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(base + path, { headers, ...opts });
+  if (res.status === 401) {
+    // Token expirado — limpiar sesión
+    try { localStorage.removeItem('mattika.sesion.v1'); } catch (e) {}
+    window.location.reload();
+    return null;
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
 const CLIENTES_PREFIX = 'mattika.clientes.v1.';
 const PAGOESTADO_PREFIX = 'mattika.pagos-estado.v1.';
 
@@ -168,6 +191,7 @@ function deriveCuotasFromReservas(empresaId) {
 }
 
 Object.assign(window, {
+  getToken, apiClient,
   gatherReservas, loteFromScope, proyectoNombreFromScope,
   loadClientesStore, saveClientesStore, deriveClientes,
   loadPagoEstado, savePagoEstado, deriveCuotasFromReservas,
