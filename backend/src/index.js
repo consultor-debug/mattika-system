@@ -3,6 +3,21 @@ const express = require('express');
 const cors = require('cors');
 const pool = require('./db/connection');
 
+// ── Express 4 async error fix ─────────────────────────────────
+// Express 4 doesn't catch thrown errors from async route handlers.
+// This patch makes all async handlers forward errors to next() automatically.
+{
+  const Layer = require('express/lib/router/layer');
+  const orig = Layer.prototype.handle_request;
+  Layer.prototype.handle_request = function(req, res, next) {
+    const fn = this.handle;
+    if (fn && fn.constructor.name === 'AsyncFunction' && fn.length < 4) {
+      return fn(req, res, next).catch(next);
+    }
+    return orig.call(this, req, res, next);
+  };
+}
+
 const app = express();
 
 // ── Middleware ────────────────────────────────────────────────
@@ -58,8 +73,9 @@ app.use('/api/dashboard',  require('./routes/dashboard'));
 
 // ── Error handler ─────────────────────────────────────────────
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Error interno del servidor' });
+  const status = err.status || err.statusCode || 500;
+  if (status >= 500) console.error(err.stack);
+  res.status(status).json({ error: err.message || 'Error interno del servidor' });
 });
 
 const PORT = process.env.PORT || 3001;

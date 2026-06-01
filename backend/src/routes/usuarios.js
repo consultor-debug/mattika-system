@@ -26,17 +26,17 @@ router.post('/', requirePerm('gestionar_usuarios'), async (req, res) => {
   if (!nombre || !username || !password) return res.status(400).json({ error: 'nombre, username y password requeridos' });
   const hash = await bcrypt.hash(password, 10);
   const id = uuidv4();
-  try {
-    const r = await pool.query(
-      `INSERT INTO usuarios (id, empresa_id, nombre, username, password_hash, rol, permisos)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, empresa_id, nombre, username, rol, activo, permisos`,
-      [id, empId||null, nombre, username, hash, rol||'Asesor', JSON.stringify(permisos||{})]
-    );
-    res.status(201).json(r.rows[0]);
-  } catch (err) {
-    if (err.code === '23505') return res.status(409).json({ error: 'El username ya existe en esta empresa' });
+  const r = await pool.query(
+    `INSERT INTO usuarios (id, empresa_id, nombre, username, password_hash, rol, permisos)
+     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, empresa_id, nombre, username, rol, activo, permisos`,
+    [id, empId||null, nombre, username, hash, rol||'Asesor', JSON.stringify(permisos||{})]
+  ).catch(err => {
+    if (err.code === '23505') {
+      const e = new Error('El username ya existe en esta empresa'); e.status = 409; throw e;
+    }
     throw err;
-  }
+  });
+  res.status(201).json(r.rows[0]);
 });
 
 // PUT /api/usuarios/:id
