@@ -200,6 +200,13 @@ const App = () => {
     setPreview(data);
     setWizardOpen(false);
     toast('Documento generado correctamente');
+    // Save contract to API
+    if (window.apiClient) {
+      window.apiClient('/api/contratos', {
+        method: 'POST',
+        body: JSON.stringify({ datos: data }),
+      }).catch(() => {});
+    }
   };
 
   const openContract = (c) => {
