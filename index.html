@@ -19,9 +19,11 @@
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script>
-  // Backend API URL — vacío para usar proxy nginx (/api/ → backend interno).
+  // Backend API URL — en producción nginx proxia /api/ al backend interno.
   // En desarrollo local cambia a 'http://localhost:3001'.
-  window.MATTIKA_API = '';
+  window.MATTIKA_API = window.location.hostname === 'localhost'
+    ? 'http://localhost:3001'
+    : window.location.origin;
 </script>
 </head>
 <body>

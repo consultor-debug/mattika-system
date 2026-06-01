@@ -443,7 +443,11 @@ const ScreenAsesores = ({ onToast }) => {
     }
     const id = data.id || 'u-' + Math.random().toString(36).slice(2, 10);
     const reg = { ...data, id, empresaId: empresa.id, activo: data.activo !== false };
-    setUsuarios(prev => isNew ? [...prev, reg] : prev.map(u => u.id === id ? { ...u, ...reg } : u));
+    setUsuarios(prev => {
+      const next = isNew ? [...prev, reg] : prev.map(u => u.id === id ? { ...u, ...reg } : u);
+      window.saveUsuarios?.(next);
+      return next;
+    });
     setModal(null);
     window.dispatchEvent(new CustomEvent('mattika:permisos-cambiado'));
     onToast?.(isNew ? `✓ Usuario "${data.usuario}" creado` : '✓ Usuario actualizado');
