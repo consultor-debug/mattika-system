@@ -63,9 +63,9 @@ const PersonaForm = ({ persona, onChange, label }) => {
   );
 };
 
-const ScreenWizard = ({ initialData, onCancel, onGenerate, asesores }) => {
-  const [stepIdx, setStepIdx] = React.useState(0);
-  const [titularidad, setTitularidad] = React.useState('unico');
+const ScreenWizard = ({ initialData, onCancel, onGenerate, asesores, onToast }) => {
+  const [stepIdx, setStepIdx] = React.useState(initialData?.stepIdx || 0);
+  const [titularidad, setTitularidad] = React.useState(initialData?.titularidad || 'unico');
   const [compradorA, setCompradorA] = React.useState({
     nombres:'', apellidos:'', dni:'',
     estadoCivil:'Soltero(a)', telefono:'', ocupacion:'',
@@ -76,6 +76,7 @@ const ScreenWizard = ({ initialData, onCancel, onGenerate, asesores }) => {
     nombres:'', apellidos:'', dni:'',
     estadoCivil:'Casado(a)', telefono:'', ocupacion:'',
     email:'', domicilio:'',
+    ...(initialData?.compradorB || {}),
   });
   const [inmueble, setInmueble] = React.useState({
     proyecto:'Nápoles Condominio Club',
@@ -116,6 +117,7 @@ const ScreenWizard = ({ initialData, onCancel, onGenerate, asesores }) => {
     fechaContrato: new Date().toISOString().slice(0,10),
     lugarFirma: 'Trujillo',
     notas: '',
+    ...(initialData?.meta || {}),
   });
 
   const cronograma = React.useMemo(() => generarCronograma(terminos), [terminos]);
@@ -137,6 +139,13 @@ const ScreenWizard = ({ initialData, onCancel, onGenerate, asesores }) => {
 
   const next = () => setStepIdx((i) => Math.min(WIZARD_STEPS.length - 1, i + 1));
   const back = () => setStepIdx((i) => Math.max(0, i - 1));
+
+  const guardarBorrador = () => {
+    const empresaId = window.getSesion?.()?.empresaId || 'default';
+    const borrador = { titularidad, compradorA, compradorB, inmueble, terminos, meta, stepIdx, ts: Date.now() };
+    try { localStorage.setItem(`wizard_borrador_${empresaId}`, JSON.stringify(borrador)); } catch {}
+    onToast?.('Borrador guardado · Se restaurará al abrir el wizard');
+  };
 
   const isCopropietarios = ['copropietarios','conyuge','separacion-bienes'].includes(titularidad);
   const cur = WIZARD_STEPS[stepIdx];
@@ -586,7 +595,7 @@ const ScreenWizard = ({ initialData, onCancel, onGenerate, asesores }) => {
           <Icon name="arrowL" size={14}/> Atrás
         </button>
         <div className="hstack gap-8">
-          <button className="btn ghost">
+          <button className="btn ghost" onClick={guardarBorrador}>
             <Icon name="download" size={14}/> Guardar borrador
           </button>
           {stepIdx < WIZARD_STEPS.length - 1 ? (

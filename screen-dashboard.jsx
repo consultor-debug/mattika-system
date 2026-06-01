@@ -1,6 +1,6 @@
 // screen-dashboard.jsx — Vista principal con métricas y atajos
 
-const ScreenDashboard = ({ onNew, onOpenContract, onGoto }) => {
+const ScreenDashboard = ({ onNew, onOpenContract, onGoto, onToast }) => {
   const sesion = window.getSesion?.() || {};
   const nombre = sesion.nombre || 'Usuario';
   const hora = new Date().getHours();
@@ -37,7 +37,7 @@ const ScreenDashboard = ({ onNew, onOpenContract, onGoto }) => {
           </div>
         </div>
         <div className="hstack gap-8">
-          <button className="btn">
+          <button className="btn" onClick={() => onToast?.('Filtro por período · Próximamente')}>
             <Icon name="filter" size={14}/> {new Date().toLocaleDateString('es-PE', {month:'long', year:'numeric'})}
           </button>
           <button className="btn primary" onClick={onNew}>

@@ -192,7 +192,23 @@ const App = () => {
     if (initialOrTipo && typeof initialOrTipo === 'object') {
       setWizardInitial(initialOrTipo);
     } else {
-      setWizardInitial(null);
+      // Intentar restaurar borrador guardado
+      try {
+        const empresaId = window.getSesion?.()?.empresaId || 'default';
+        const raw = localStorage.getItem(`wizard_borrador_${empresaId}`);
+        if (raw) {
+          const b = JSON.parse(raw);
+          // Solo restaurar si tiene menos de 7 días
+          if (Date.now() - b.ts < 7 * 86400000) {
+            setWizardInitial(b);
+          } else {
+            localStorage.removeItem(`wizard_borrador_${empresaId}`);
+            setWizardInitial(null);
+          }
+        } else {
+          setWizardInitial(null);
+        }
+      } catch { setWizardInitial(null); }
     }
     setWizardOpen(true);
     setPreview(null);
@@ -401,7 +417,7 @@ const App = () => {
         </header>
 
         <main>
-          {curScreen === 'dashboard' && <ScreenDashboard onNew={startNew} onOpenContract={openContract} onGoto={goto} />}
+          {curScreen === 'dashboard' && <ScreenDashboard onNew={startNew} onOpenContract={openContract} onGoto={goto} onToast={toast} />}
           {curScreen === 'contracts' && <ScreenContracts onOpenContract={openContract} onNew={startNew} initialFilterStatus={routeParams.status} onToast={toast} />}
           {curScreen === 'clients' && <ScreenClients onToast={toast} />}
           {curScreen === 'plano' && <ScreenPlano key={scopeKey} onNew={startNew} onToast={toast} />}
@@ -416,7 +432,7 @@ const App = () => {
           {curScreen === 'settings' && <ScreenSettings onToast={toast} t={t} setTweak={setTweak} />}
           {curScreen === 'wizard' && <ScreenWizard initialData={wizardInitial}
           onCancel={() => {setWizardOpen(false);}}
-          onGenerate={handleGenerate} />}
+          onGenerate={handleGenerate} onToast={toast} />}
           {curScreen === 'preview' && <ScreenPreview data={preview} onBack={() => setPreview(null)} onToast={toast} />}
         </main>
       </div>
