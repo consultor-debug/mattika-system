@@ -562,8 +562,11 @@ const ScreenAsesores = ({ onToast }) => {
 
 const AsesorUserModal = ({ initial, empresaNombre, onClose, onSave }) => {
   const rolDefaults = window.permisosPorRol || ((r) => ({}));
+  const CLAVE_PLACEHOLDER = '••••••••••';
   const [f, setF] = React.useState(() => {
-    const base = initial || { usuario:'', clave:'', nombre:'', rol:'Asesor', activo:true };
+    const base = initial
+      ? { ...initial, clave: initial.clave || CLAVE_PLACEHOLDER }
+      : { usuario:'', clave:'', nombre:'', rol:'Asesor', activo:true };
     return { ...base, permisos: base.permisos ? { ...rolDefaults(base.rol), ...base.permisos } : rolDefaults(base.rol) };
   });
   const [showPass, setShowPass] = React.useState(!initial);
@@ -575,7 +578,8 @@ const AsesorUserModal = ({ initial, empresaNombre, onClose, onSave }) => {
   };
   const submit = (ev) => {
     ev.preventDefault();
-    if (!f.usuario.trim() || !f.clave.trim()) return;
+    if (!f.usuario?.trim()) return;
+    if (!initial && !f.clave?.trim()) return; // solo requerido al crear
     onSave({ ...f, ...(initial ? { id: initial.id } : {}) });
   };
   return (
