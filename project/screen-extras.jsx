@@ -703,7 +703,7 @@ const SettingsPerfil = ({ onToast }) => {
           <div className="card-title">{p.nombre}</div>
           <div className="muted text-sm">{p.rol} · {p.email}</div>
         </div>
-        <button className="btn"><Icon name="upload" size={13}/> Cambiar foto</button>
+        <button className="btn" onClick={() => onToast('Carga de foto próximamente')}><Icon name="upload" size={13}/> Cambiar foto</button>
       </div>
       <div className="field-group cols-2">
         <div className="field"><label className="field-label">Nombre completo</label><input className="input" value={p.nombre} onChange={(e)=>upd('nombre', e.target.value)}/></div>

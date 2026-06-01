@@ -451,7 +451,15 @@ const ScreenContracts = ({ onOpenContract, onNew, initialFilterStatus }) => {
           <div className="page-sub">Todos los documentos generados por el equipo.</div>
         </div>
         <div className="hstack gap-8">
-          <button className="btn"><Icon name="download" size={14}/> Exportar</button>
+          <button className="btn" onClick={() => {
+            const rows = [['Código','Cliente','DNI','Tipo','Proyecto','Inmueble','Asesor','Precio S/','Inicial S/','Estado','Fecha']];
+            filtered.forEach(c => rows.push([c.code, c.cliente, c.dni||'', c.tipo, c.proyecto, c.unidad||'', c.asesor||'', c.precio||'', c.inicial||'', c.status, c.fecha]));
+            const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+            const a = document.createElement('a');
+            a.href = 'data:text/csv;charset=utf-8,﻿' + encodeURIComponent(csv);
+            a.download = `contratos_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+          }}><Icon name="download" size={14}/> Exportar</button>
           <button className="btn primary" onClick={() => onNew()}>
             <Icon name="plus" size={15}/> Nuevo documento
           </button>
@@ -559,15 +567,18 @@ Object.assign(window, { ScreenContracts, Tabs });
 
 // screen-clients.jsx — Catálogo de clientes y plantillas (simple placeholders)
 
-const ScreenClients = () => {
-  const clients = [
+const ScreenClients = ({ onToast }) => {
+  const [clients, setClients] = React.useState([
     { id:1, n:'Rosa Mercedes Pacheco Arias',   dni:'45872391', contratos: 1, ult:'2026-05-22' },
     { id:2, n:'Javier Eduardo Cisneros Tello', dni:'09887452', contratos: 1, ult:'2026-05-21' },
     { id:3, n:'Lucía Ramos Velarde',           dni:'47225910', contratos: 1, ult:'2026-05-19' },
     { id:4, n:'Andrea Jiménez Soto',           dni:'42118094', contratos: 2, ult:'2026-05-18' },
     { id:5, n:'Renzo Tapia Ferrer',            dni:'41005781', contratos: 1, ult:'2026-05-14' },
     { id:6, n:'Patricia Olarte Núñez',         dni:'09553127', contratos: 1, ult:'2026-05-16' },
-  ];
+  ]);
+  const [q, setQ] = React.useState('');
+  const filtered = clients.filter(c => !q || c.n.toLowerCase().includes(q.toLowerCase()) || c.dni.includes(q));
+
   return (
     <div className="page" data-screen-label="Clientes">
       <div className="page-head">
@@ -575,15 +586,24 @@ const ScreenClients = () => {
           <h1 className="page-title">Clientes</h1>
           <div className="page-sub">Personas naturales registradas en el sistema.</div>
         </div>
-        <button className="btn primary"><Icon name="plus" size={15}/> Nuevo cliente</button>
+        <button className="btn primary" onClick={() => onToast?.('Módulo de clientes en desarrollo · Próximamente')}>
+          <Icon name="plus" size={15}/> Nuevo cliente
+        </button>
+      </div>
+
+      <div className="card card-pad mb-12" style={{padding:'10px 14px'}}>
+        <div className="search" style={{margin:0}}>
+          <Icon name="search" size={14}/>
+          <input placeholder="Buscar por nombre o DNI..." value={q} onChange={e=>setQ(e.target.value)}/>
+        </div>
       </div>
 
       <div className="card">
         <table className="tbl">
           <thead><tr><th>Nombre</th><th>DNI</th><th className="right">Contratos</th><th>Última actividad</th><th></th></tr></thead>
           <tbody>
-            {clients.map(c => (
-              <tr key={c.id}>
+            {filtered.map(c => (
+              <tr key={c.id} style={{cursor:'pointer'}} onClick={() => onToast?.(`${c.n} · ${c.contratos} contrato${c.contratos!==1?'s':''}`)}>
                 <td className="hstack gap-10">
                   <div className="avatar sm">{c.n.split(' ').map(p=>p[0]).slice(0,2).join('')}</div>
                   <span className="strong">{c.n}</span>

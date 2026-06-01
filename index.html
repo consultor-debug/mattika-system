@@ -402,7 +402,7 @@ const App = () => {
 
         <main>
           {curScreen === 'dashboard' && <ScreenDashboard onNew={startNew} onOpenContract={openContract} onGoto={goto} />}
-          {curScreen === 'contracts' && <ScreenContracts onOpenContract={openContract} onNew={startNew} initialFilterStatus={routeParams.status} />}
+          {curScreen === 'contracts' && <ScreenContracts onOpenContract={openContract} onNew={startNew} initialFilterStatus={routeParams.status} onToast={toast} />}
           {curScreen === 'clients' && <ScreenClients onToast={toast} />}
           {curScreen === 'plano' && <ScreenPlano key={scopeKey} onNew={startNew} onToast={toast} />}
           {curScreen === 'inmuebles' && <ScreenLotesAdmin key={scopeKey} onToast={toast} onGoto={goto} />}

@@ -145,7 +145,15 @@ const ScreenPagos = ({ initialFilter, onToast }) => {
           </div>
         </div>
         <div className="hstack gap-8">
-          <button className="btn"><Icon name="download" size={14}/> Exportar</button>
+          <button className="btn" onClick={() => {
+            const rows = [['Código','Cliente','DNI','Cuota N°','Vencimiento','Monto S/','Estado','Pagado el','Operación','Método']];
+            cuotas.forEach(c => rows.push([c.code, c.cliente, c.dni, c.n, c.vence, c.monto, c.estado, c.pagadoEl||'', c.operacion||'', c.metodo||'']));
+            const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+            const a = document.createElement('a');
+            a.href = 'data:text/csv;charset=utf-8,﻿' + encodeURIComponent(csv);
+            a.download = `cuotas_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+          }}><Icon name="download" size={14}/> Exportar</button>
           {puedeRegistrar && (
             <button className="btn primary" onClick={() => { 
               const venc = cuotas.find(c => c.estado === 'vencida');

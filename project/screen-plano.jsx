@@ -180,6 +180,70 @@ const ESTADO_TOKENS = {
 const fmtPEN  = (n) => new Intl.NumberFormat('es-PE', { style:'currency', currency:'PEN', maximumFractionDigits:0 }).format(n);
 const fmtPENc = (n) => new Intl.NumberFormat('es-PE', { style:'currency', currency:'PEN', maximumFractionDigits:2 }).format(n);
 
+const descargarCotizacionPDF = ({ lote, fin, modo, enganchePct, plazo, tasa, precioContado, descuento, onToast }) => {
+  const proy = window.getProyectoActual?.()?.nombre || 'Proyecto';
+  const empresa = window.getEmpresa?.()?.nombre || '';
+  const fecha = new Date().toLocaleDateString('es-PE', { day:'2-digit', month:'long', year:'numeric' });
+  const html = `
+    <div style="font-family:Arial,sans-serif;color:#0B1A33;padding:32px;max-width:700px;margin:0 auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #1E4FD4;padding-bottom:12px;margin-bottom:24px">
+        <div>
+          <div style="font-size:22px;font-weight:700;color:#1E4FD4">${empresa || 'Mattika'}</div>
+          <div style="font-size:13px;color:#666">Sistema de Gestión Inmobiliaria</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:16px;font-weight:600">COTIZACIÓN</div>
+          <div style="font-size:12px;color:#666">${fecha}</div>
+        </div>
+      </div>
+
+      <div style="background:#f5f7ff;border-radius:8px;padding:16px;margin-bottom:20px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px;color:#1E4FD4">${proy}</div>
+        <div style="font-size:20px;font-weight:700">Lote ${lote.id} · Manzana ${lote.manzana || ''}</div>
+        <div style="color:#666;margin-top:4px">${lote.m2 || lote.area || ''} m² · Precio de lista: ${fmtPEN(lote.precio)}</div>
+      </div>
+
+      ${modo === 'contado' ? `
+      <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
+        <tr style="background:#1E4FD4;color:#fff"><td colspan="2" style="padding:10px 14px;font-weight:600;border-radius:6px 6px 0 0">Pago al contado</td></tr>
+        <tr style="border-bottom:1px solid #e8edf7"><td style="padding:10px 14px">Precio de lista</td><td style="padding:10px 14px;text-align:right">${fmtPEN(lote.precio)}</td></tr>
+        ${descuento > 0 ? `<tr style="border-bottom:1px solid #e8edf7;color:#d92b2b"><td style="padding:10px 14px">Descuento adicional</td><td style="padding:10px 14px;text-align:right">−${fmtPEN(descuento)}</td></tr>` : ''}
+        <tr style="background:#f5f7ff;font-weight:700;font-size:16px"><td style="padding:12px 14px;border-radius:0 0 0 6px">Total al contado</td><td style="padding:12px 14px;text-align:right;border-radius:0 0 6px 0">${fmtPEN(precioContado)}</td></tr>
+      </table>
+      ` : `
+      <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
+        <tr style="background:#1E4FD4;color:#fff"><td colspan="2" style="padding:10px 14px;font-weight:600;border-radius:6px 6px 0 0">Financiamiento a ${plazo} meses · Tasa ${tasa.toFixed(1)}% anual</td></tr>
+        <tr style="border-bottom:1px solid #e8edf7"><td style="padding:10px 14px">Precio de lista</td><td style="padding:10px 14px;text-align:right">${fmtPEN(lote.precio)}</td></tr>
+        ${descuento > 0 ? `<tr style="border-bottom:1px solid #e8edf7;color:#d92b2b"><td style="padding:10px 14px">Descuento adicional</td><td style="padding:10px 14px;text-align:right">−${fmtPEN(descuento)}</td></tr>` : ''}
+        <tr style="border-bottom:1px solid #e8edf7"><td style="padding:10px 14px">Inicial (${enganchePct}%)</td><td style="padding:10px 14px;text-align:right">${fmtPEN(fin.enganche)}</td></tr>
+        <tr style="border-bottom:1px solid #e8edf7"><td style="padding:10px 14px">Saldo a financiar</td><td style="padding:10px 14px;text-align:right">${fmtPEN(fin.montoFinanciado)}</td></tr>
+        <tr style="border-bottom:1px solid #e8edf7;color:#666"><td style="padding:10px 14px">Intereses totales</td><td style="padding:10px 14px;text-align:right">${fmtPEN(fin.intereses)}</td></tr>
+        <tr style="background:#f5f7ff;border-bottom:1px solid #e8edf7"><td style="padding:10px 14px;font-weight:600">Cuota mensual</td><td style="padding:10px 14px;text-align:right;font-weight:600;font-size:18px;color:#1E4FD4">${fmtPENc(fin.mensualidad)}</td></tr>
+        <tr style="background:#f5f7ff;font-weight:700;font-size:16px"><td style="padding:12px 14px;border-radius:0 0 0 6px">Total a pagar</td><td style="padding:12px 14px;text-align:right;border-radius:0 0 6px 0">${fmtPEN(fin.totalPagado)}</td></tr>
+      </table>
+      `}
+
+      <div style="font-size:11px;color:#999;border-top:1px solid #e8edf7;padding-top:12px;margin-top:8px">
+        Cálculo referencial sujeto a evaluación crediticia. Precios en Soles (S/).
+        Esta cotización es válida por 7 días calendario desde la fecha de emisión.
+      </div>
+    </div>
+  `;
+  const el = document.createElement('div');
+  el.innerHTML = html;
+  document.body.appendChild(el);
+  window.html2pdf().set({
+    margin: 0,
+    filename: `Cotizacion_Lote_${lote.id}.pdf`,
+    image: { type:'jpeg', quality:0.98 },
+    html2canvas: { scale:2 },
+    jsPDF: { unit:'mm', format:'a4', orientation:'portrait' },
+  }).from(el).save().then(() => {
+    document.body.removeChild(el);
+    onToast('Cotización descargada');
+  });
+};
+
 function calcFinanciamiento({ precio, enganchePct, plazoMeses, tasaAnual }) {
   const enganche = precio * (enganchePct / 100);
   const montoFinanciado = precio - enganche;
@@ -1087,7 +1151,7 @@ const Cotizador = ({ lote, reserva, puedeVender = true, onGenerarVenta, onAparta
                     )}
                   </div>
                 </div>
-                <button className="btn block" onClick={() => onToast('Cotización descargada')}>
+                <button className="btn block" onClick={() => descargarCotizacionPDF({ lote, fin, modo, enganchePct, plazo, tasa, precioContado, descuento, onToast })}>
                   <Icon name="download" size={14}/> Descargar cotización (PDF)
                 </button>
               </>
@@ -1116,7 +1180,7 @@ const Cotizador = ({ lote, reserva, puedeVender = true, onGenerarVenta, onAparta
                     No tienes permiso para apartar o vender lotes. Puedes consultar el precio y enviar la cotización al cliente.
                   </div>
                 )}
-                <button className="btn block" onClick={() => onToast('Cotización descargada')}>
+                <button className="btn block" onClick={() => descargarCotizacionPDF({ lote, fin, modo, enganchePct, plazo, tasa, precioContado, descuento, onToast })}>
                   <Icon name="download" size={14}/> Descargar cotización (PDF)
                 </button>
                 <button className="btn ghost block" onClick={() => {

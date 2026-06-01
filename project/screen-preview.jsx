@@ -194,7 +194,7 @@ const ScreenPreview = ({ data, onBack, onToast }) => {
           </div>
         </div>
         <div className="hstack gap-8">
-          <button className="btn"><Icon name="edit" size={14}/> Editar datos</button>
+          <button className="btn" onClick={onBack}><Icon name="edit" size={14}/> Editar datos</button>
         </div>
       </div>
 
