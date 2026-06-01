@@ -18,8 +18,15 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+  // Backend API URL — en producción nginx proxia /api/ al backend interno.
+  // En desarrollo local cambia a 'http://localhost:3001'.
+  window.MATTIKA_API = window.location.hostname === 'localhost'
+    ? 'http://localhost:3001'
+    : window.location.origin;
+</script>
 </head>
-<body style="font-family: Poppins">
+<body>
 <div id="root"></div>
 
 <script type="text/babel" src="tweaks-panel.jsx"></script>
@@ -195,6 +202,13 @@ const App = () => {
     setPreview(data);
     setWizardOpen(false);
     toast('Documento generado correctamente');
+    // Save contract to API
+    if (window.apiClient) {
+      window.apiClient('/api/contratos', {
+        method: 'POST',
+        body: JSON.stringify({ datos: data }),
+      }).catch(() => {});
+    }
   };
 
   const openContract = (c) => {

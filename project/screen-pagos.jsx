@@ -58,6 +58,40 @@ const ScreenPagos = ({ initialFilter, onToast }) => {
     return () => window.removeEventListener('focus', refresh);
   }, [build]);
 
+  // Load cuotas from API (merges with local)
+  React.useEffect(() => {
+    if (!window.apiClient || !empresaId) return;
+    window.apiClient('/api/cuotas').then(data => {
+      if (!data?.length) return;
+      const hoy = new Date();
+      const apiCuotas = data.map(q => {
+        const vence = new Date(q.fecha_vencimiento);
+        const diasMora = q.estado === 'pendiente' && vence < hoy
+          ? Math.floor((hoy - vence) / 86400000) : 0;
+        return {
+          id: q.id,
+          code: q.contrato_codigo || q.contrato_id,
+          cliente: q.contrato_cliente || '',
+          dni: q.contrato_dni || '',
+          n: q.numero,
+          vence: q.fecha_vencimiento?.slice(0,10),
+          monto: parseFloat(q.monto),
+          estado: diasMora > 0 && q.estado === 'pendiente' ? 'vencida' : q.estado,
+          diasMora,
+          pagadoEl: q.fecha_pago?.slice(0,10),
+          operacion: q.num_operacion,
+          metodo: q.metodo_pago,
+          _apiId: q.id,
+        };
+      });
+      setCuotas(prev => {
+        const ids = new Set(apiCuotas.map(c => c.id));
+        const local = prev.filter(c => !ids.has(c.id));
+        return [...apiCuotas, ...local];
+      });
+    }).catch(() => {});
+  }, [empresaId]);
+
   const filtered = cuotas.filter(c => {
     if (filter !== 'todas' && c.estado !== filter) return false;
     if (q && !`${c.cliente} ${c.code} ${c.dni}`.toLowerCase().includes(q.toLowerCase())) return false;
@@ -83,6 +117,18 @@ const ScreenPagos = ({ initialFilter, onToast }) => {
     window.savePagoEstado?.(empresaId, pe);
     setCuotas(build());
     setRegCuota(null);
+    // Sync payment to API
+    if (window.apiClient && cuota._apiId) {
+      window.apiClient(`/api/cuotas/${cuota._apiId}/pago`, {
+        method: 'POST',
+        body: JSON.stringify({
+          fecha: datos.fecha,
+          monto: datos.monto,
+          metodoPago: datos.metodo,
+          numOperacion: datos.operacion,
+        }),
+      }).catch(() => {});
+    }
     onToast(`✓ Pago registrado: ${cuota.cliente} · S/ ${fmtSoles(cuota.monto)}`);
   };
 
