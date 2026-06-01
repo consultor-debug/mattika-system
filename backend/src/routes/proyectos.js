@@ -97,4 +97,27 @@ router.delete('/:proyectoId/etapas/:etapaId', requirePerm('gestionar_proyectos')
   res.json({ ok: true });
 });
 
+// ── Alineación del plano (polígonos editados + lotes extra) ──────
+
+// GET /api/proyectos/:proyectoId/etapas/:etapaId/alineacion
+router.get('/:proyectoId/etapas/:etapaId/alineacion', async (req, res) => {
+  const r = await pool.query(
+    `SELECT plano_alineacion FROM etapas WHERE id = $1 AND proyecto_id = $2`,
+    [req.params.etapaId, req.params.proyectoId]
+  );
+  res.json(r.rows[0]?.plano_alineacion || {});
+});
+
+// PATCH /api/proyectos/:proyectoId/etapas/:etapaId/alineacion
+router.patch('/:proyectoId/etapas/:etapaId/alineacion', requirePerm('gestionar_proyectos'), async (req, res) => {
+  const { vertOverrides, lotesExtra } = req.body;
+  const data = JSON.stringify({ vertOverrides: vertOverrides || {}, lotesExtra: lotesExtra || [] });
+  const r = await pool.query(
+    `UPDATE etapas SET plano_alineacion = $1 WHERE id = $2 AND proyecto_id = $3 RETURNING id`,
+    [data, req.params.etapaId, req.params.proyectoId]
+  );
+  if (!r.rows[0]) return res.status(404).json({ error: 'Etapa no encontrada' });
+  res.json({ ok: true });
+});
+
 module.exports = router;

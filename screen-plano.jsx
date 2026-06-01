@@ -1773,6 +1773,73 @@ const ScreenPlano = ({ onNew, onToast }) => {
     }).catch(() => {});
   }, []);
 
+  // Load plano alignment (polygon overrides + custom lots) from API on mount
+  React.useEffect(() => {
+    if (!window.apiClient) return;
+    const proy = window.getProyectoActual?.();
+    const eta  = window.getEtapaActual?.();
+    if (!proy?.id || !eta?.id) return;
+    window.apiClient(`/api/proyectos/${proy.id}/etapas/${eta.id}/alineacion`).then(data => {
+      if (!data) return;
+      if (data.vertOverrides && Object.keys(data.vertOverrides).length) {
+        setVertOverrides(data.vertOverrides);
+        saveVertOverrides(data.vertOverrides);
+      }
+      if (data.lotesExtra && data.lotesExtra.length) {
+        setLotesExtra(data.lotesExtra);
+        saveLotesExtra(data.lotesExtra);
+      }
+    }).catch(() => {});
+  }, []);
+
+  // Debounced save of plano alignment to API (2s after last change)
+  const _alineacionTimer = React.useRef(null);
+  React.useEffect(() => {
+    if (!window.apiClient) return;
+    const proy = window.getProyectoActual?.();
+    const eta  = window.getEtapaActual?.();
+    if (!proy?.id || !eta?.id) return;
+    clearTimeout(_alineacionTimer.current);
+    _alineacionTimer.current = setTimeout(() => {
+      window.apiClient(`/api/proyectos/${proy.id}/etapas/${eta.id}/alineacion`, {
+        method: 'PATCH',
+        body: JSON.stringify({ vertOverrides, lotesExtra }),
+      }).catch(() => {});
+    }, 2000);
+    return () => clearTimeout(_alineacionTimer.current);
+  }, [vertOverrides, lotesExtra]);
+
+  // Migrate localStorage reservas (without _apiId) to the API
+  React.useEffect(() => {
+    if (!window.apiClient || !adminLotesMap || !adminLotesMap.size) return;
+    const proy = window.getProyectoActual?.();
+    const eta  = window.getEtapaActual?.();
+    if (!proy?.id) return;
+    Object.values(reservas).forEach(r => {
+      if (r._apiId) return;
+      const parts = r.loteId?.split('-');
+      if (!parts || parts.length < 2) return;
+      const manzana = parts[0];
+      const numero  = parseInt(parts[1]);
+      const entry   = adminLotesMap.get(`${manzana}-${numero}`);
+      if (!entry?._apiId) return;
+      window.apiClient('/api/reservas', {
+        method: 'POST',
+        body: JSON.stringify({
+          loteId: entry._apiId, proyectoId: proy.id, etapaId: eta?.id,
+          tipo: r.tipo, compradorNombre: r.nombres, compradorApellidos: r.apellidos,
+          compradorDni: r.dni, compradorTelefono: r.telefono, compradorCorreo: r.email,
+        }),
+      }).then(res => {
+        if (res?.id) setReservas(prev => {
+          const upd = { ...prev, [r.loteId]: { ...prev[r.loteId], _apiId: res.id } };
+          saveReservas(upd);
+          return upd;
+        });
+      }).catch(() => {});
+    });
+  }, [adminLotesMap]);
+
   const allLotes = React.useMemo(() => {
     const estadoMap = { 'Disponible':'disponible', 'Separado':'separado', 'Vendido':'vendido' };
     // Mezcla los datos del Administrador de Lotes (fuente única) sobre la geometría.
