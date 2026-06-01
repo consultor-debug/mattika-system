@@ -384,30 +384,96 @@ const ScreenAsesores = ({ onToast }) => {
   const puedeGestionar = window.can?.('gestionar_usuarios') ?? false;
 
   const [usuarios, setUsuarios] = React.useState(() => window.loadUsuarios?.() || []);
-  const [modal, setModal] = React.useState(null); // null | 'new' | usuario
+  const [modal, setModal] = React.useState(null);
   const [verClaves, setVerClaves] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
 
-  const persist = (next) => { setUsuarios(next); window.saveUsuarios?.(next); };
-  const equipo = usuarios.filter(u => u.empresaId === empresa?.id);
+  React.useEffect(() => {
+    if (!window.apiClient) return;
+    setLoading(true);
+    window.apiClient('/api/usuarios').then(data => {
+      if (!Array.isArray(data)) return;
+      const normalized = data.map(u => ({
+        id: u.id, empresaId: u.empresa_id, nombre: u.nombre,
+        usuario: u.username, rol: u.rol || 'Asesor',
+        activo: u.activo !== false, permisos: u.permisos || {},
+        _fromApi: true,
+      }));
+      setUsuarios(normalized);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const equipo = usuarios.filter(u => !u.empresaId || u.empresaId === empresa?.id);
   const activos = equipo.filter(u => u.activo).length;
 
-  const guardar = (data) => {
+  const guardar = async (data) => {
     const isNew = !data.id;
+    if (window.apiClient) {
+      try {
+        let result;
+        if (isNew) {
+          result = await window.apiClient('/api/usuarios', {
+            method: 'POST',
+            body: JSON.stringify({ nombre: data.nombre, username: data.usuario, password: data.clave, rol: data.rol, permisos: data.permisos }),
+          });
+        } else {
+          result = await window.apiClient(`/api/usuarios/${data.id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ nombre: data.nombre, rol: data.rol, activo: data.activo, permisos: data.permisos }),
+          });
+          if (data.clave && data.clave !== '••••••••••') {
+            await window.apiClient(`/api/usuarios/${data.id}/password`, {
+              method: 'PUT',
+              body: JSON.stringify({ password: data.clave }),
+            }).catch(() => {});
+          }
+        }
+        if (result?.id) {
+          const reg = { id: result.id, empresaId: result.empresa_id, nombre: result.nombre, usuario: result.username, rol: result.rol, activo: result.activo !== false, permisos: result.permisos || {}, _fromApi: true };
+          setUsuarios(prev => isNew ? [...prev, reg] : prev.map(u => u.id === reg.id ? { ...u, ...reg } : u));
+          setModal(null);
+          window.dispatchEvent(new CustomEvent('mattika:permisos-cambiado'));
+          onToast?.(isNew ? `✓ Usuario "${data.usuario}" creado` : '✓ Usuario actualizado');
+          return;
+        }
+      } catch (err) {
+        onToast?.('Error: ' + (err.message || 'No se pudo guardar'));
+        return;
+      }
+    }
     const id = data.id || 'u-' + Math.random().toString(36).slice(2, 10);
     const reg = { ...data, id, empresaId: empresa.id, activo: data.activo !== false };
-    persist(isNew ? [...usuarios, reg] : usuarios.map(u => u.id === id ? { ...u, ...reg } : u));
+    setUsuarios(prev => isNew ? [...prev, reg] : prev.map(u => u.id === id ? { ...u, ...reg } : u));
     setModal(null);
     window.dispatchEvent(new CustomEvent('mattika:permisos-cambiado'));
     onToast?.(isNew ? `✓ Usuario "${data.usuario}" creado` : '✓ Usuario actualizado');
   };
-  const toggle = (u) => {
-    persist(usuarios.map(x => x.id === u.id ? { ...x, activo: !x.activo } : x));
+
+  const toggle = async (u) => {
+    if (window.apiClient && u._fromApi) {
+      try {
+        await window.apiClient(`/api/usuarios/${u.id}`, { method: 'PUT', body: JSON.stringify({ activo: !u.activo }) });
+        setUsuarios(prev => prev.map(x => x.id === u.id ? { ...x, activo: !x.activo } : x));
+        onToast?.(u.activo ? 'Usuario desactivado' : 'Usuario reactivado');
+        return;
+      } catch (err) { onToast?.('Error al cambiar estado'); return; }
+    }
+    setUsuarios(prev => prev.map(x => x.id === u.id ? { ...x, activo: !x.activo } : x));
     onToast?.(u.activo ? 'Usuario desactivado' : 'Usuario reactivado');
   };
-  const eliminar = (u) => {
+
+  const eliminar = async (u) => {
     if (u.id === sesion?.usuarioId) { onToast?.('No puedes eliminar tu propio usuario'); return; }
     if (!window.confirm(`¿Eliminar al usuario "${u.usuario}" (${u.nombre})?`)) return;
-    persist(usuarios.filter(x => x.id !== u.id));
+    if (window.apiClient && u._fromApi) {
+      try {
+        await window.apiClient(`/api/usuarios/${u.id}`, { method: 'DELETE' });
+        setUsuarios(prev => prev.filter(x => x.id !== u.id));
+        onToast?.('Usuario eliminado');
+        return;
+      } catch (err) { onToast?.('Error al eliminar: ' + err.message); return; }
+    }
+    setUsuarios(prev => prev.filter(x => x.id !== u.id));
     onToast?.('Usuario eliminado');
   };
 
@@ -424,9 +490,7 @@ const ScreenAsesores = ({ onToast }) => {
           </div>
         </div>
         <div className="hstack gap-8">
-          <button className="btn" onClick={() => setVerClaves(v => !v)}>
-            <Icon name="eye" size={14}/> {verClaves ? 'Ocultar claves' : 'Ver claves'}
-          </button>
+          {loading && <span className="muted text-xs">Cargando…</span>}
           {puedeGestionar && (
             <button className="btn primary" onClick={() => setModal('new')}>
               <Icon name="plus" size={15}/> Nuevo usuario
@@ -448,7 +512,7 @@ const ScreenAsesores = ({ onToast }) => {
       <div className="card">
         <table className="tbl">
           <thead><tr>
-            <th>Usuario</th><th>Acceso</th><th>Rol</th><th>Clave</th><th>Estado</th><th></th>
+            <th>Usuario</th><th>Acceso</th><th>Rol</th><th>Estado</th><th></th>
           </tr></thead>
           <tbody>
             {equipo.map((u) => (
@@ -462,7 +526,6 @@ const ScreenAsesores = ({ onToast }) => {
                 </td>
                 <td className="mono"><b>{u.usuario}</b></td>
                 <td><span className="pill outline">{u.rol}</span></td>
-                <td className="mono muted">{verClaves ? u.clave : '•'.repeat(Math.min(u.clave?.length || 8, 10))}</td>
                 <td>{u.activo
                   ? <span className="pill success"><span className="dot"/>Activo</span>
                   : <span className="pill"><span className="dot"/>Inactivo</span>}</td>

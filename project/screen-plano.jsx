@@ -1722,6 +1722,57 @@ const ScreenPlano = ({ onNew, onToast }) => {
     return () => window.removeEventListener('focus', refresh);
   }, [adminKey]);
 
+  // Load lotes from API (overrides localStorage on mount)
+  React.useEffect(() => {
+    if (!window.apiClient) return;
+    const proy = window.getProyectoActual?.();
+    const eta  = window.getEtapaActual?.();
+    if (!proy?.id) return;
+    const q = `proyectoId=${encodeURIComponent(proy.id)}` + (eta?.id ? `&etapaId=${encodeURIComponent(eta.id)}` : '');
+    window.apiClient(`/api/lotes?${q}`).then(data => {
+      if (!data?.length) return;
+      const m = new Map();
+      data.forEach(l => {
+        const num = parseInt(l.numero) || l.numero;
+        m.set(`${l.manzana}-${num}`, {
+          codigo: l.codigo, manzana: l.manzana, numero: num,
+          m2: parseFloat(l.area)||undefined, frente: parseFloat(l.frente)||undefined,
+          fondo: parseFloat(l.fondo)||undefined, lder: parseFloat(l.l_der)||undefined,
+          lizq: parseFloat(l.l_izq)||undefined, precio: parseFloat(l.precio)||undefined,
+          estado: l.estado ? (l.estado.charAt(0).toUpperCase()+l.estado.slice(1)) : 'Disponible',
+          tipologia: l.tipologia, etapa: l.etapa_id||'', _apiId: l.id,
+        });
+      });
+      setAdminLotesMap(m);
+    }).catch(() => {});
+  }, []);
+
+  // Load reservas from API (merges with localStorage)
+  React.useEffect(() => {
+    if (!window.apiClient) return;
+    const proy = window.getProyectoActual?.();
+    const eta  = window.getEtapaActual?.();
+    if (!proy?.id) return;
+    const q = `proyectoId=${encodeURIComponent(proy.id)}` + (eta?.id ? `&etapaId=${encodeURIComponent(eta.id)}` : '');
+    window.apiClient(`/api/reservas?${q}`).then(data => {
+      if (!data?.length) return;
+      const map = {};
+      data.forEach(r => {
+        if (!r.manzana || r.numero == null) return;
+        const planoId = `${r.manzana}-${String(parseInt(r.numero)).padStart(2,'0')}`;
+        map[planoId] = {
+          loteId: planoId, tipo: r.tipo,
+          nombres: r.comprador_nombre, apellidos: r.comprador_apellidos,
+          dni: r.comprador_dni, telefono: r.comprador_telefono, email: r.comprador_correo,
+          fecha: r.creada_el, _apiId: r.id,
+        };
+      });
+      if (Object.keys(map).length) {
+        setReservas(prev => ({ ...map, ...prev }));
+      }
+    }).catch(() => {});
+  }, []);
+
   const allLotes = React.useMemo(() => {
     const estadoMap = { 'Disponible':'disponible', 'Separado':'separado', 'Vendido':'vendido' };
     // Mezcla los datos del Administrador de Lotes (fuente única) sobre la geometría.
@@ -2003,18 +2054,85 @@ const ScreenPlano = ({ onNew, onToast }) => {
     setReservas(next);
     saveReservas(next);
     setQuickSaleOpen(false);
-    onToast?.(
-      data.tipo === 'venta'
-        ? `✓ Lote ${data.loteId} marcado como VENDIDO a ${data.nombres}`
-        : `✓ Lote ${data.loteId} apartado para ${data.nombres}`
+    // Sync to API
+    if (window.apiClient) {
+      const lote = allLotes.find(l => l.id === data.loteId);
+      const apiLoteId = lote ? adminLotesMap?.get(`${lote.manzana}-${lote.numero}`)?._apiId : null;
+      if (apiLoteId) {
+        const proy = window.getProyectoActual?.();
+        const eta  = window.getEtapaActual?.();
+        window.apiClient('/api/reservas', {
+          method: 'POST',
+          body: JSON.stringify({
+            loteId: apiLoteId, proyectoId: proy?.id, etapaId: eta?.id,
+            tipo: data.tipo, compradorNombre: data.nombres, compradorApellidos: data.apellidos,
+            compradorDni: data.dni, compradorTelefono: data.telefono,
+            compradorCorreo: data.email, precio: lote?.precio,
+          }),
+        }).then(r => {
+          if (r?.id) setReservas(prev => {
+            const upd = { ...prev, [data.loteId]: { ...prev[data.loteId], _apiId: r.id } };
+            saveReservas(upd);
+            return upd;
+          });
+        }).catch(() => {});
+      }
+    }
+    onToast?.(data.tipo === 'venta'
+      ? `✓ Lote ${data.loteId} marcado como VENDIDO a ${data.nombres}`
+      : `✓ Lote ${data.loteId} apartado para ${data.nombres}`
     );
   };
   const cancelarReserva = (loteId) => {
+    const apiId = reservas[loteId]?._apiId;
     const next = { ...reservas };
     delete next[loteId];
     setReservas(next);
     saveReservas(next);
+    if (window.apiClient && apiId) {
+      window.apiClient(`/api/reservas/${apiId}`, { method: 'DELETE' }).catch(() => {});
+    }
     onToast?.(`Reserva del Lote ${loteId} cancelada`);
+  };
+
+  const exportarPlano = () => {
+    const svgEl = document.querySelector('.plano-svg');
+    if (!svgEl) { onToast?.('Sin plano para exportar'); return; }
+    const W = PLANO_VIEWBOX.w, H = PLANO_VIEWBOX.h;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#f5f3ee';
+    ctx.fillRect(0, 0, W, H);
+    const doDownload = () => {
+      const proy = (window.getProyectoActual?.()?.nombre || 'proyecto').replace(/\s+/g, '-');
+      const eta  = (window.getEtapaActual?.()?.nombre  || 'etapa').replace(/\s+/g, '-');
+      const a = document.createElement('a');
+      a.download = `Plano_${proy}_${eta}_${new Date().toISOString().slice(0,10)}.png`;
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+      onToast?.('Plano exportado como PNG');
+    };
+    const drawSvg = () => {
+      const clone = svgEl.cloneNode(true);
+      clone.setAttribute('width', W);
+      clone.setAttribute('height', H);
+      const svgStr = new XMLSerializer().serializeToString(clone);
+      const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => { ctx.drawImage(img, 0, 0, W, H); URL.revokeObjectURL(url); doDownload(); };
+      img.onerror = () => { URL.revokeObjectURL(url); doDownload(); };
+      img.src = url;
+    };
+    if (planoImg && planoImg.startsWith('data:')) {
+      const bg = new Image();
+      bg.onload = () => { ctx.drawImage(bg, 0, 0, W, H); drawSvg(); };
+      bg.onerror = drawSvg;
+      bg.src = planoImg;
+    } else {
+      drawSvg();
+    }
   };
 
   // Imagen de fondo del plano para el alcance activo (empresa·proyecto·etapa).
@@ -2073,7 +2191,7 @@ const ScreenPlano = ({ onNew, onToast }) => {
               <Icon name="edit" size={14}/> {editMode ? 'Salir de edición' : 'Editar polígonos'}
             </button>
           )}
-          <button className="btn"><Icon name="download" size={14}/> Exportar plano</button>
+          <button className="btn" onClick={exportarPlano}><Icon name="download" size={14}/> Exportar plano</button>
         </div>
       </div>
 

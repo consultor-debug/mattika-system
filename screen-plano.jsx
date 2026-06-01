@@ -2095,6 +2095,46 @@ const ScreenPlano = ({ onNew, onToast }) => {
     onToast?.(`Reserva del Lote ${loteId} cancelada`);
   };
 
+  const exportarPlano = () => {
+    const svgEl = document.querySelector('.plano-svg');
+    if (!svgEl) { onToast?.('Sin plano para exportar'); return; }
+    const W = PLANO_VIEWBOX.w, H = PLANO_VIEWBOX.h;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#f5f3ee';
+    ctx.fillRect(0, 0, W, H);
+    const doDownload = () => {
+      const proy = (window.getProyectoActual?.()?.nombre || 'proyecto').replace(/\s+/g, '-');
+      const eta  = (window.getEtapaActual?.()?.nombre  || 'etapa').replace(/\s+/g, '-');
+      const a = document.createElement('a');
+      a.download = `Plano_${proy}_${eta}_${new Date().toISOString().slice(0,10)}.png`;
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+      onToast?.('Plano exportado como PNG');
+    };
+    const drawSvg = () => {
+      const clone = svgEl.cloneNode(true);
+      clone.setAttribute('width', W);
+      clone.setAttribute('height', H);
+      const svgStr = new XMLSerializer().serializeToString(clone);
+      const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => { ctx.drawImage(img, 0, 0, W, H); URL.revokeObjectURL(url); doDownload(); };
+      img.onerror = () => { URL.revokeObjectURL(url); doDownload(); };
+      img.src = url;
+    };
+    if (planoImg && planoImg.startsWith('data:')) {
+      const bg = new Image();
+      bg.onload = () => { ctx.drawImage(bg, 0, 0, W, H); drawSvg(); };
+      bg.onerror = drawSvg;
+      bg.src = planoImg;
+    } else {
+      drawSvg();
+    }
+  };
+
   // Imagen de fondo del plano para el alcance activo (empresa·proyecto·etapa).
   // Si el proyecto no es la semilla y no tiene plano subido, queda en blanco
   // y se muestra una invitación a subirlo.
@@ -2151,7 +2191,7 @@ const ScreenPlano = ({ onNew, onToast }) => {
               <Icon name="edit" size={14}/> {editMode ? 'Salir de edición' : 'Editar polígonos'}
             </button>
           )}
-          <button className="btn"><Icon name="download" size={14}/> Exportar plano</button>
+          <button className="btn" onClick={exportarPlano}><Icon name="download" size={14}/> Exportar plano</button>
         </div>
       </div>
 
