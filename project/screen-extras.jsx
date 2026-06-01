@@ -20,6 +20,7 @@ const ScreenClients = ({ onToast }) => {
   const [q, setQ] = React.useState('');
   const [nuevoOpen, setNuevoOpen] = React.useState(false);
   const [detalleId, setDetalleId] = React.useState(null);
+  const [editCliente, setEditCliente] = React.useState(null);
 
   const refresh = () => setClients(window.deriveClientes?.(empresaId) || []);
   React.useEffect(() => {
@@ -43,6 +44,24 @@ const ScreenClients = ({ onToast }) => {
     onToast?.(`✓ Cliente ${data.nombres} ${data.apellidos} registrado`);
   };
 
+  const updateCliente = (data) => {
+    const store = window.loadClientesStore?.(empresaId) || [];
+    const next = store.map(c => c.id === data.id ? { ...c, ...data } : c);
+    window.saveClientesStore?.(empresaId, next);
+    refresh();
+    onToast?.(`✓ Cliente actualizado`);
+  };
+
+  const exportCSV = () => {
+    const rows = [['Nombres','Apellidos','DNI','Estado Civil','Teléfono','Correo','Domicilio','Contratos']];
+    clients.forEach(c => rows.push([c.nombres, c.apellidos, c.dni, c.estadoCivil||'', c.telefono||'', c.email||'', c.domicilio||'', c.contratos||0]));
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = 'data:text/csv;charset=utf-8,﻿' + encodeURIComponent(csv);
+    a.download = `clientes_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+  };
+
   const detalle = clients.find(c => c.id === detalleId);
   const conOperaciones = clients.filter(c => (c.operaciones || []).length > 0).length;
 
@@ -57,7 +76,7 @@ const ScreenClients = ({ onToast }) => {
           </div>
         </div>
         <div className="hstack gap-8">
-          <button className="btn"><Icon name="download" size={14}/> Exportar</button>
+          <button className="btn" onClick={exportCSV}><Icon name="download" size={14}/> Exportar</button>
           <button className="btn primary" onClick={() => setNuevoOpen(true)}>
             <Icon name="plus" size={15}/> Nuevo cliente
           </button>
@@ -114,13 +133,14 @@ const ScreenClients = ({ onToast }) => {
       </div>
 
       {nuevoOpen && <ClienteNuevoModal onClose={() => setNuevoOpen(false)} onSave={addCliente}/>}
-      {detalle && <ClienteDetailDrawer cliente={detalle} onClose={() => setDetalleId(null)}/>}
+      {editCliente && <ClienteNuevoModal initial={editCliente} onClose={() => setEditCliente(null)} onSave={(d) => updateCliente({ ...d, id: editCliente.id })}/>}
+      {detalle && <ClienteDetailDrawer cliente={detalle} onClose={() => setDetalleId(null)} onEdit={() => { setEditCliente(detalle); setDetalleId(null); }}/>}
     </div>
   );
 };
 
-const ClienteNuevoModal = ({ onClose, onSave }) => {
-  const [f, setF] = React.useState({ nombres:'', apellidos:'', dni:'', estadoCivil:'Soltero', telefono:'', email:'', domicilio:'' });
+const ClienteNuevoModal = ({ onClose, onSave, initial }) => {
+  const [f, setF] = React.useState(initial || { nombres:'', apellidos:'', dni:'', estadoCivil:'Soltero', telefono:'', email:'', domicilio:'' });
   const set = (k, v) => setF({ ...f, [k]: v });
   const submit = () => {
     if (!f.nombres.trim() || !f.apellidos.trim() || f.dni.length !== 8) {
@@ -134,7 +154,7 @@ const ClienteNuevoModal = ({ onClose, onSave }) => {
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" style={{width:'min(620px, calc(100vw - 32px))'}} onClick={(e)=>e.stopPropagation()}>
         <div className="card-head">
-          <div className="card-title hstack gap-8"><Icon name="users" size={16}/> Nuevo cliente</div>
+          <div className="card-title hstack gap-8"><Icon name="users" size={16}/> {initial ? 'Editar cliente' : 'Nuevo cliente'}</div>
           <button className="icon-btn" onClick={onClose}><Icon name="x" size={14}/></button>
         </div>
         <div className="card-pad">
@@ -157,7 +177,7 @@ const ClienteNuevoModal = ({ onClose, onSave }) => {
   );
 };
 
-const ClienteDetailDrawer = ({ cliente, onClose }) => (
+const ClienteDetailDrawer = ({ cliente, onClose, onEdit }) => (
   <div className="modal-bg" onClick={onClose}>
     <div className="drawer" onClick={(e)=>e.stopPropagation()}>
       <div className="drawer-head">
@@ -206,7 +226,7 @@ const ClienteDetailDrawer = ({ cliente, onClose }) => (
       </div>
       <div className="drawer-foot">
         <button className="btn" onClick={onClose}>Cerrar</button>
-        <button className="btn primary"><Icon name="edit" size={13}/> Editar</button>
+        <button className="btn primary" onClick={onEdit}><Icon name="edit" size={13}/> Editar</button>
       </div>
     </div>
   </div>
@@ -237,6 +257,7 @@ const ScreenInmuebles = () => {
   const [items, setItems] = React.useState(INMUEBLES_INICIAL);
   const [nuevoOpen, setNuevoOpen] = React.useState(false);
   const [detalleId, setDetalleId] = React.useState(null);
+  const [editInmueble, setEditInmueble] = React.useState(null);
   const [filtroSt, setFiltroSt] = React.useState('all');
 
   const filtered = items.filter(i => filtroSt === 'all' || i.st === filtroSt);
@@ -312,19 +333,22 @@ const ScreenInmuebles = () => {
       {nuevoOpen && <InmuebleNuevoModal onClose={() => setNuevoOpen(false)} onSave={(d) => {
         setItems([{ ...d, id: Date.now(), st:'Disponible', partida:'11550511', proy:'Nápoles Condominio Club' }, ...items]);
       }}/>}
-      {detalle && <InmuebleDetailModal inmueble={detalle} onClose={() => setDetalleId(null)} stMap={stMap}/>}
+      {editInmueble && <InmuebleNuevoModal initial={editInmueble} onClose={() => setEditInmueble(null)} onSave={(d) => {
+        setItems(items.map(i => i.id === editInmueble.id ? { ...i, ...d } : i));
+      }}/>}
+      {detalle && <InmuebleDetailModal inmueble={detalle} onClose={() => setDetalleId(null)} stMap={stMap} onEdit={() => { setEditInmueble(detalle); setDetalleId(null); }}/>}
     </div>
   );
 };
 
-const InmuebleNuevoModal = ({ onClose, onSave }) => {
-  const [f, setF] = React.useState({ code:'', mz:'', area:'', precio:'' });
+const InmuebleNuevoModal = ({ onClose, onSave, initial }) => {
+  const [f, setF] = React.useState(initial ? { code: initial.code, mz: initial.mz, area: initial.area, precio: initial.precio } : { code:'', mz:'', area:'', precio:'' });
   const set = (k, v) => setF({ ...f, [k]: v });
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" onClick={(e)=>e.stopPropagation()}>
         <div className="card-head">
-          <div className="card-title hstack gap-8"><Icon name="building" size={16}/> Nuevo inmueble</div>
+          <div className="card-title hstack gap-8"><Icon name="building" size={16}/> {initial ? 'Editar inmueble' : 'Nuevo inmueble'}</div>
           <button className="icon-btn" onClick={onClose}><Icon name="x" size={14}/></button>
         </div>
         <div className="card-pad">
@@ -346,7 +370,7 @@ const InmuebleNuevoModal = ({ onClose, onSave }) => {
   );
 };
 
-const InmuebleDetailModal = ({ inmueble, onClose, stMap }) => (
+const InmuebleDetailModal = ({ inmueble, onClose, stMap, onEdit }) => (
   <div className="modal-bg" onClick={onClose}>
     <div className="modal" style={{width:'min(560px, calc(100vw - 32px))'}} onClick={(e)=>e.stopPropagation()}>
       <div className="card-head">
@@ -367,7 +391,7 @@ const InmuebleDetailModal = ({ inmueble, onClose, stMap }) => (
       </div>
       <div style={{padding:14, borderTop:'1px solid var(--border)', display:'flex', justifyContent:'flex-end', gap:8}}>
         <button className="btn" onClick={onClose}>Cerrar</button>
-        <button className="btn primary"><Icon name="edit" size={13}/> Editar</button>
+        <button className="btn primary" onClick={onEdit}><Icon name="edit" size={13}/> Editar</button>
       </div>
     </div>
   </div>
