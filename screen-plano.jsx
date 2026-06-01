@@ -2098,35 +2098,50 @@ const ScreenPlano = ({ onNew, onToast }) => {
   const exportarPlano = () => {
     const svgEl = document.querySelector('.plano-svg');
     if (!svgEl) { onToast?.('Sin plano para exportar'); return; }
+    onToast?.('Generando imagen…');
     const W = PLANO_VIEWBOX.w, H = PLANO_VIEWBOX.h;
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#f5f3ee';
     ctx.fillRect(0, 0, W, H);
+
     const doDownload = () => {
-      const proy = (window.getProyectoActual?.()?.nombre || 'proyecto').replace(/\s+/g, '-');
-      const eta  = (window.getEtapaActual?.()?.nombre  || 'etapa').replace(/\s+/g, '-');
-      const a = document.createElement('a');
-      a.download = `Plano_${proy}_${eta}_${new Date().toISOString().slice(0,10)}.png`;
-      a.href = canvas.toDataURL('image/png');
-      a.click();
-      onToast?.('Plano exportado como PNG');
+      try {
+        const proy = (window.getProyectoActual?.()?.nombre || 'proyecto').replace(/\s+/g, '-');
+        const eta  = (window.getEtapaActual?.()?.nombre  || 'etapa').replace(/\s+/g, '-');
+        const a = document.createElement('a');
+        a.download = `Plano_${proy}_${eta}_${new Date().toISOString().slice(0,10)}.png`;
+        a.href = canvas.toDataURL('image/png');
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        onToast?.('Plano exportado como PNG');
+      } catch(e) { onToast?.('Error al exportar: ' + e.message); }
     };
+
     const drawSvg = () => {
-      const clone = svgEl.cloneNode(true);
-      clone.setAttribute('width', W);
-      clone.setAttribute('height', H);
-      const svgStr = new XMLSerializer().serializeToString(clone);
-      const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const img = new Image();
-      img.onload = () => { ctx.drawImage(img, 0, 0, W, H); URL.revokeObjectURL(url); doDownload(); };
-      img.onerror = () => { URL.revokeObjectURL(url); doDownload(); };
-      img.src = url;
+      try {
+        const clone = svgEl.cloneNode(true);
+        clone.setAttribute('width', W);
+        clone.setAttribute('height', H);
+        clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        // Reemplazar variables CSS que no resuelven en SVG standalone
+        const brand = getComputedStyle(document.documentElement).getPropertyValue('--brand').trim() || '#1E4FD4';
+        clone.querySelectorAll('[stroke]').forEach(el => {
+          if (el.getAttribute('stroke')?.includes('var(--brand)')) el.setAttribute('stroke', brand);
+        });
+        const svgStr = new XMLSerializer().serializeToString(clone);
+        const img = new Image();
+        img.onload = () => { ctx.drawImage(img, 0, 0, W, H); doDownload(); };
+        img.onerror = doDownload;
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
+      } catch(e) { doDownload(); }
     };
-    if (planoImg && planoImg.startsWith('data:')) {
+
+    if (planoImg) {
       const bg = new Image();
+      bg.crossOrigin = 'anonymous';
       bg.onload = () => { ctx.drawImage(bg, 0, 0, W, H); drawSvg(); };
       bg.onerror = drawSvg;
       bg.src = planoImg;
