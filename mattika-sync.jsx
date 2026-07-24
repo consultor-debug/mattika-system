@@ -13,6 +13,11 @@
   const API = window.MATTIKA_API || ''; // mismo origen: Express sirve web + /api
   window.MATTIKA_API = API;
   const TOKEN_KEY = 'mattika.token';
+  // Identidad (usuarios/empresas): NO van al KV genérico — tienen tablas y
+  // rutas tipadas (/api/usuarios, /api/empresas) porque el login autentica
+  // contra Postgres. Se espejan aparte (ver sección "Identidad").
+  const USUARIOS_KEY = 'mattika.usuarios.v1';
+  const EMPRESAS_KEY = 'mattika.empresas.v1';
 
   const getToken = () => { try { return localStorage.getItem(TOKEN_KEY) || null; } catch (e) { return null; } };
   const setToken = (t) => { try { t ? _setItem(TOKEN_KEY, t) : _removeItem(TOKEN_KEY); } catch (e) {} };
@@ -74,7 +79,12 @@
 
   localStorage.setItem = function (key, value) {
     _setItem(key, value);
-    if (!suppress && getToken() && esDato(key)) { pendientes.add(key); scheduleFlush(); }
+    if (suppress || !getToken()) return;
+    // Identidad: espejo tipado (crea filas reales en Postgres para login).
+    if (key === USUARIOS_KEY) { scheduleIdentity('usu'); return; }
+    if (key === EMPRESAS_KEY) { scheduleIdentity('emp'); return; }
+    // Resto de DATOS: KV genérico.
+    if (esDato(key)) { pendientes.add(key); scheduleFlush(); }
   };
   localStorage.removeItem = function (key) {
     _removeItem(key);
@@ -92,8 +102,151 @@
     return out;
   }
 
-  // ── Hidratación: server → localStorage ──────────────────────────
-  async function hydrate() {
+  // ════════════════════════════════════════════════════════════════
+  // Identidad: usuarios + empresas contra rutas tipadas (Postgres).
+  // El login autentica contra la tabla `usuarios`, así que crear/editar/
+  // borrar usuarios y empresas debe reflejarse en filas reales (no en el
+  // KV genérico). Se hidrata la lista desde el servidor al entrar/recargar
+  // y se espejan las escrituras con un diff contra un snapshot.
+  // ════════════════════════════════════════════════════════════════
+  const sesionActual = () => { try { return (window.loadSesion && window.loadSesion()) || null; } catch (e) { return null; } };
+  const readKey = (k) => { try { const raw = localStorage.getItem(k); const v = raw ? JSON.parse(raw) : []; return Array.isArray(v) ? v : []; } catch (e) { return []; } };
+
+  // Mapeos DB ↔ forma del frontend.
+  function usuFromApi(u) {
+    return { id: u.id, empresaId: u.empresa_id, usuario: u.username, clave: '',
+             nombre: u.nombre, rol: u.rol, activo: u.activo !== false, permisos: u.permisos || {} };
+  }
+  function empFromApi(e, prevById) {
+    // Merge sobre la empresa local para preservar datos anidados (proyectos,
+    // etapas, branding) que la tabla `empresas` no guarda.
+    return Object.assign({}, prevById[e.id] || {},
+      { id: e.id, nombre: e.nombre, color: e.color, activa: e.activa !== false });
+  }
+  const snapUsuEntry = (u) => ({ nombre: u.nombre, rol: u.rol, activo: u.activo !== false,
+                                 permisos: u.permisos || {}, clave: u.clave || '', empresaId: u.empresaId });
+  const snapEmpEntry = (e) => ({ nombre: e.nombre, color: e.color, activa: e.activa !== false });
+
+  let snapUsu = new Map(); // id → snapUsuEntry (estado conocido en el server)
+  let snapEmp = new Map(); // id → snapEmpEntry
+  const permisosIguales = (a, b) => JSON.stringify(a || {}) === JSON.stringify(b || {});
+
+  // ── Espejo de USUARIOS (diff vs snapshot) ───────────────────────
+  async function mirrorUsuarios(nextArr) {
+    const me = sesionActual();
+    if (!getToken() || !me) return;
+    const isMaster = me.tipo === 'master';
+    // En sesión de empresa solo se tocan los usuarios de ESA empresa (el POST
+    // usa req.user.empresaId; mandar otros crearía usuarios ajenos por error).
+    const next = (nextArr || []).filter((u) => isMaster || u.empresaId === me.empresaId);
+    const nextIds = new Set(next.map((u) => u.id));
+
+    for (const u of next) {
+      const prev = snapUsu.get(u.id);
+      if (!prev) {
+        const body = { id: u.id, nombre: u.nombre, username: u.usuario,
+                       password: u.clave || Math.random().toString(36).slice(2, 12),
+                       rol: u.rol, permisos: u.permisos || {} };
+        if (isMaster) body.empresaId = u.empresaId;
+        try {
+          await api('/api/usuarios', { method: 'POST', body: JSON.stringify(body) });
+          if (u.activo === false) await api('/api/usuarios/' + encodeURIComponent(u.id), { method: 'PUT', body: JSON.stringify({ activo: false }) });
+        } catch (e) { /* 409 dup u otros: se reintenta en el próximo guardado */ }
+      } else {
+        const changed = prev.nombre !== u.nombre || prev.rol !== u.rol ||
+          prev.activo !== (u.activo !== false) || !permisosIguales(prev.permisos, u.permisos);
+        if (changed) {
+          try { await api('/api/usuarios/' + encodeURIComponent(u.id), { method: 'PUT', body: JSON.stringify({ nombre: u.nombre, rol: u.rol, activo: u.activo !== false, permisos: u.permisos || {} }) }); } catch (e) {}
+        }
+        if (u.clave && u.clave !== prev.clave) {
+          try { await api('/api/usuarios/' + encodeURIComponent(u.id) + '/password', { method: 'PUT', body: JSON.stringify({ password: u.clave }) }); } catch (e) {}
+        }
+      }
+    }
+    for (const id of snapUsu.keys()) {
+      if (!nextIds.has(id)) { try { await api('/api/usuarios/' + encodeURIComponent(id), { method: 'DELETE' }); } catch (e) {} }
+    }
+    snapUsu = new Map(next.map((u) => [u.id, snapUsuEntry(u)]));
+  }
+
+  // ── Espejo de EMPRESAS (solo master; rutas /api/empresas son master) ─
+  async function mirrorEmpresas(nextArr) {
+    const me = sesionActual();
+    if (!getToken() || !me || me.tipo !== 'master') return;
+    const next = nextArr || [];
+    const nextIds = new Set(next.map((e) => e.id));
+    for (const e of next) {
+      const prev = snapEmp.get(e.id);
+      if (!prev) {
+        try {
+          await api('/api/empresas', { method: 'POST', body: JSON.stringify({ id: e.id, nombre: e.nombre, color: e.color }) });
+          if (e.activa === false) await api('/api/empresas/' + encodeURIComponent(e.id), { method: 'PUT', body: JSON.stringify({ activa: false }) });
+        } catch (err) {}
+      } else {
+        const changed = prev.nombre !== e.nombre || prev.color !== e.color || prev.activa !== (e.activa !== false);
+        if (changed) { try { await api('/api/empresas/' + encodeURIComponent(e.id), { method: 'PUT', body: JSON.stringify({ nombre: e.nombre, color: e.color, activa: e.activa !== false }) }); } catch (err) {} }
+      }
+    }
+    for (const id of snapEmp.keys()) {
+      if (!nextIds.has(id)) { try { await api('/api/empresas/' + encodeURIComponent(id), { method: 'DELETE' }); } catch (err) {} }
+    }
+    snapEmp = new Map(next.map((e) => [e.id, snapEmpEntry(e)]));
+  }
+
+  // Debounce compartido para no disparar en cada tecla/migración.
+  let idTimer = null; const idPend = { usu: false, emp: false };
+  function scheduleIdentity(which) {
+    idPend[which] = true;
+    if (idTimer) return;
+    idTimer = setTimeout(async () => {
+      idTimer = null;
+      const doU = idPend.usu, doE = idPend.emp; idPend.usu = false; idPend.emp = false;
+      // Empresas PRIMERO: un usuario nuevo referencia empresa_id (FK), así que
+      // la fila de la empresa debe existir antes de insertar sus usuarios.
+      if (doE) { try { await mirrorEmpresas(readKey(EMPRESAS_KEY)); } catch (e) {} }
+      if (doU) { try { await mirrorUsuarios(readKey(USUARIOS_KEY)); } catch (e) {} }
+    }, 700);
+  }
+
+  // ── Hidratación de identidad: server (Postgres) → localStorage ──
+  // meArg: la sesión que se está estableciendo (en login aún no está guardada).
+  async function hydrateIdentity(meArg) {
+    const me = meArg || sesionActual();
+    if (!getToken() || !me) return;
+    if (me.tipo === 'master') {
+      const [emps, usus] = await Promise.all([
+        api('/api/empresas').catch(() => null),
+        api('/api/usuarios').catch(() => null),
+      ]);
+      suppress = true;
+      try {
+        if (Array.isArray(emps)) {
+          const prevById = {}; for (const e of readKey(EMPRESAS_KEY)) prevById[e.id] = e;
+          _setItem(EMPRESAS_KEY, JSON.stringify(emps.map((e) => empFromApi(e, prevById))));
+          snapEmp = new Map(emps.map((e) => [e.id, snapEmpEntry(e)]));
+        }
+        if (Array.isArray(usus)) {
+          const list = usus.filter((u) => u.tipo !== 'master').map(usuFromApi);
+          _setItem(USUARIOS_KEY, JSON.stringify(list));
+          snapUsu = new Map(list.map((u) => [u.id, snapUsuEntry(u)]));
+        }
+      } finally { suppress = false; }
+    } else {
+      // Sesión de empresa: /api/empresas es master-only, así que solo se
+      // hidratan los usuarios de la propia empresa (los demás quedan intactos).
+      const usus = await api('/api/usuarios').catch(() => null);
+      if (Array.isArray(usus)) {
+        const mine = usus.filter((u) => u.tipo !== 'master').map(usuFromApi);
+        const otros = readKey(USUARIOS_KEY).filter((u) => u.empresaId !== me.empresaId);
+        suppress = true;
+        try { _setItem(USUARIOS_KEY, JSON.stringify(otros.concat(mine))); } finally { suppress = false; }
+        snapUsu = new Map(mine.map((u) => [u.id, snapUsuEntry(u)]));
+      }
+    }
+  }
+
+  // ── Hidratación KV (datos operativos por empresa) ───────────────
+  async function hydrateKv() {
     if (!getToken()) return;
     let data;
     try { data = await api('/api/store'); }
@@ -114,6 +267,14 @@
         _setItem(k, JSON.stringify(data[k]));
       }
     } finally { suppress = false; }
+  }
+
+  // ── Hidratación completa: KV (solo empresa) + identidad ─────────
+  // meArg: sesión que se está estableciendo (en login aún no está guardada).
+  async function hydrate(meArg) {
+    const me = meArg || sesionActual();
+    if (me && me.tipo === 'empresa') await hydrateKv(); // el KV es por empresa
+    await hydrateIdentity(me);
   }
 
   // ── Login remoto (JWT contra Postgres, con fallback local) ──────
@@ -175,7 +336,7 @@
 
     if (sesion.tipo === 'empresa') {
       // Inyecta el usuario logueado en el blob local para que can()/permisos
-      // resuelvan con exactitud (queda local; no se sincroniza).
+      // resuelvan con exactitud antes de la hidratación.
       try {
         const us = (window.loadUsuarios && window.loadUsuarios()) || [];
         const idx = us.findIndex(function (u) { return u.id === user.id; });
@@ -183,8 +344,10 @@
         if (idx >= 0) us[idx] = Object.assign({}, us[idx], entry); else us.push(entry);
         window.saveUsuarios && window.saveUsuarios(us);
       } catch (e) {}
-      await hydrate();
     }
+    // Hidrata datos + identidad desde Postgres (empresa y master). Se pasa la
+    // sesión recién creada porque aún no está guardada en localStorage.
+    await hydrate(sesion);
     return { ok: true, sesion: sesion };
   };
 
@@ -203,8 +366,8 @@
       _ready = (async function () {
         try {
           const s = (window.loadSesion && window.loadSesion()) || null;
-          if (s && s.tipo === 'empresa') {
-            if (getToken()) { await hydrate(); }
+          if (s && (s.tipo === 'empresa' || s.tipo === 'master')) {
+            if (getToken()) { await hydrate(s); }
             else {
               // Sesión local heredada sin token (login viejo) → pedir re-login
               // para obtener JWT y poder sincronizar.

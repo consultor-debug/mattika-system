@@ -21,11 +21,18 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   const { nombre, color = '#1E4FD4' } = req.body;
   if (!nombre) return res.status(400).json({ error: 'nombre requerido' });
-  const id = nombre.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').substring(0, 30) + '-' + Date.now().toString(36);
+  // Acepta el id del cliente (para que el id local del frontend == id en DB y
+  // el mirror no tenga que reconciliar ids). Fallback a un id derivado del nombre.
+  const id = (typeof req.body.id === 'string' && /^[a-zA-Z0-9._-]{1,50}$/.test(req.body.id))
+    ? req.body.id
+    : nombre.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').substring(0, 30) + '-' + Date.now().toString(36);
   const r = await pool.query(
     `INSERT INTO empresas (id, nombre, color) VALUES ($1, $2, $3) RETURNING *`,
     [id, nombre, color]
-  );
+  ).catch(err => {
+    if (err.code === '23505') { const e = new Error('Ya existe una empresa con ese id/nombre'); e.status = 409; throw e; }
+    throw err;
+  });
   res.status(201).json(r.rows[0]);
 });
 

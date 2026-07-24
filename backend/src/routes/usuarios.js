@@ -25,7 +25,10 @@ router.post('/', requirePerm('gestionar_usuarios'), async (req, res) => {
   const { nombre, username, password, rol, permisos } = req.body;
   if (!nombre || !username || !password) return res.status(400).json({ error: 'nombre, username y password requeridos' });
   const hash = await bcrypt.hash(password, 10);
-  const id = uuidv4();
+  // Acepta el id del cliente (para que el id local del frontend == id en DB y
+  // el mirror no tenga que reconciliar ids). Fallback a uuid si no viene o es inválido.
+  const id = (typeof req.body.id === 'string' && /^[a-zA-Z0-9._-]{1,50}$/.test(req.body.id))
+    ? req.body.id : uuidv4();
   const r = await pool.query(
     `INSERT INTO usuarios (id, empresa_id, nombre, username, password_hash, rol, permisos)
      VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, empresa_id, nombre, username, rol, activo, permisos`,
