@@ -213,6 +213,15 @@
   async function hydrateIdentity(meArg) {
     const me = meArg || sesionActual();
     if (!getToken() || !me) return;
+    // El server NUNCA devuelve la contraseña (solo el hash). Pero la UI muestra
+    // y edita la clave en texto ("Ver claves"), guardada en localStorage. Al
+    // hidratar preservamos la clave local conocida por id, para no vaciarla
+    // (síntoma: "se borran las credenciales al recargar"). El login sigue
+    // autenticando contra el hash del server; la clave local es solo para la UI.
+    const withLocalClave = (list) => {
+      const prev = {}; for (const u of readKey(USUARIOS_KEY)) prev[u.id] = u;
+      return list.map((u) => (prev[u.id] && prev[u.id].clave) ? Object.assign(u, { clave: prev[u.id].clave }) : u);
+    };
     if (me.tipo === 'master') {
       const [emps, usus] = await Promise.all([
         api('/api/empresas').catch(() => null),
@@ -226,7 +235,7 @@
           snapEmp = new Map(emps.map((e) => [e.id, snapEmpEntry(e)]));
         }
         if (Array.isArray(usus)) {
-          const list = usus.filter((u) => u.tipo !== 'master').map(usuFromApi);
+          const list = withLocalClave(usus.filter((u) => u.tipo !== 'master').map(usuFromApi));
           _setItem(USUARIOS_KEY, JSON.stringify(list));
           snapUsu = new Map(list.map((u) => [u.id, snapUsuEntry(u)]));
         }
@@ -236,7 +245,7 @@
       // hidratan los usuarios de la propia empresa (los demás quedan intactos).
       const usus = await api('/api/usuarios').catch(() => null);
       if (Array.isArray(usus)) {
-        const mine = usus.filter((u) => u.tipo !== 'master').map(usuFromApi);
+        const mine = withLocalClave(usus.filter((u) => u.tipo !== 'master').map(usuFromApi));
         const otros = readKey(USUARIOS_KEY).filter((u) => u.empresaId !== me.empresaId);
         suppress = true;
         try { _setItem(USUARIOS_KEY, JSON.stringify(otros.concat(mine))); } finally { suppress = false; }

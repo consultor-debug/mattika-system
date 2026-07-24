@@ -607,7 +607,7 @@ const ScreenMattikaAdmin = ({ onToast, onCerrarSesion }) => {
     const isNew = !data.id;
     const id = data.id || 'u-' + Math.random().toString(36).slice(2, 10);
     const next = isNew
-      ? [...usuarios, { ...data, id, activo: data.activo !== false }]
+      ? [...usuarios, { ...data, id, empresaId: data.empresaId || empresaSel, activo: data.activo !== false }]
       : usuarios.map(u => u.id === id ? { ...u, ...data, id } : u);
     persistUsuarios(next);
     setUsuarioModal(null);
