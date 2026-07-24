@@ -94,10 +94,22 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.static(FRONTEND_DIR, { index: 'index.html', extensions: ['html'] }));
+// El código del frontend (html/jsx/css) NO se cachea de forma dura: el navegador
+// revalida en cada carga (ETag → 304 si no cambió, barato). Así "editar → push →
+// deploy" se ve al instante para todos, sin quedar atrapados en JS viejo cacheado.
+// Las imágenes (png) sí se cachean (grandes y casi nunca cambian).
+const NO_CACHE_RE = /\.(html|jsx|css)$/i;
+app.use(express.static(FRONTEND_DIR, {
+  index: 'index.html',
+  extensions: ['html'],
+  setHeaders: (res, filePath) => {
+    res.setHeader('Cache-Control', NO_CACHE_RE.test(filePath) ? 'no-cache' : 'public, max-age=86400');
+  },
+}));
 
 // Fallback SPA: cualquier ruta que no sea /api/ ni /health devuelve index.html.
 app.get(/^\/(?!api\/|health).*/, (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(FRONTEND_DIR, 'index.html'));
 });
 
