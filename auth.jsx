@@ -290,22 +290,28 @@ const LoginScreen = ({ onLogin }) => {
     } catch (e) {}
   }, []);
 
-  const submit = (ev) => {
+  const submit = async (ev) => {
     ev?.preventDefault?.();
     setError(null);
     setLoading(true);
-    // Pequeño delay para que se sienta como una validación real
-    setTimeout(() => {
-      const res = autenticar({ empresa, usuario, clave });
-      setLoading(false);
-      if (!res.ok) { setError(res.error); return; }
+    // Login contra el backend (JWT). loginRemoto cae a modo local si el
+    // servidor no responde; un 401 real sí muestra "usuario o clave".
+    try {
+      const login = window.loginRemoto
+        ? window.loginRemoto
+        : (c) => Promise.resolve(autenticar(c));
+      const res = await login({ empresa, usuario, clave });
+      if (!res.ok) { setLoading(false); setError(res.error); return; }
       if (recuerda) {
         try { localStorage.setItem('mattika.last-login.v1', JSON.stringify({ empresa, usuario })); } catch (e) {}
       } else {
         try { localStorage.removeItem('mattika.last-login.v1'); } catch (e) {}
       }
       onLogin(res.sesion);
-    }, 450);
+    } catch (e) {
+      setLoading(false);
+      setError('No se pudo conectar con el servidor. Intenta de nuevo.');
+    }
   };
 
   const llenarDemo = (empName, user, pass) => {

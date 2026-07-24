@@ -28,6 +28,7 @@
 
 <script type="text/babel" src="tweaks-panel.jsx"></script>
 <script type="text/babel" src="auth.jsx"></script>
+<script type="text/babel" src="mattika-sync.jsx"></script>
 <script type="text/babel" src="bundle-core.jsx"></script>
 <script type="text/babel" src="ubigeo.jsx"></script>
 <script type="text/babel" src="data-store.jsx"></script>
@@ -523,7 +524,11 @@ const App = () => {
 
 };
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+// Hidrata datos desde el servidor (si hay sesión activa) ANTES de pintar,
+// para que al recargar todos vean lo último. En login por primera vez, la
+// hidratación la hace loginRemoto antes de onLogin.
+(window.MattikaSync ? window.MattikaSync.ready() : Promise.resolve())
+  .then(() => ReactDOM.createRoot(document.getElementById('root')).render(<App />));
 </script>
 </body>
 </html>
