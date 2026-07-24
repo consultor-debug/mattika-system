@@ -1,0 +1,7 @@
+.git
+**/node_modules
+backend/.env
+**/.DS_Store
+project/
+chats/
+*.md

@@ -1,9 +1,18 @@
+# Único servicio "mattika-app": Express sirve el FRONTEND estático + la API /api/.
+# IMPORTANTE: el build context debe ser la RAÍZ del repo (no backend/),
+# para poder copiar tanto backend/ como el frontend (index.html, *.jsx, styles.css, assets).
 FROM node:20-alpine
 WORKDIR /app
-COPY package*.json ./
-RUN npm install --omit=dev
+
+# Dependencias del backend primero (mejor cacheo de capas)
+COPY backend/package*.json ./backend/
+RUN cd backend && npm install --omit=dev
+
+# Código del servidor + frontend servido tal cual (sin build)
 COPY . .
+
+WORKDIR /app/backend
 EXPOSE 3001
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s \
   CMD wget -qO- http://localhost:3001/health || exit 1
 CMD ["node", "src/index.js"]

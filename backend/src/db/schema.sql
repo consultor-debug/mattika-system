@@ -177,3 +177,46 @@ CREATE INDEX IF NOT EXISTS idx_cuotas_contrato ON cuotas(contrato_id);
 CREATE INDEX IF NOT EXISTS idx_cuotas_empresa ON cuotas(empresa_id);
 CREATE INDEX IF NOT EXISTS idx_auditoria_empresa ON auditoria(empresa_id);
 CREATE INDEX IF NOT EXISTS idx_usuarios_empresa ON usuarios(empresa_id);
+
+-- ═══════════════════════════════════════════════════════════
+-- Almacén clave/valor genérico por empresa (multi-tenant).
+-- Guarda VERBATIM los "blobs" JSON que el frontend mantenía en
+-- localStorage: tanto el módulo Comercial (napoles_ventas,
+-- napoles_ejecutivos, …) como el resto de claves de datos
+-- (mattika.reservas.v1.<scope>, mattika.ventas.v1.<empresa>, …).
+-- Esto habilita la capa de sync: hidratar al entrar + replicar al
+-- guardar, sin traducir el shape por módulo.
+-- ═══════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS app_kv (
+  empresa_id     VARCHAR(50) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+  clave          VARCHAR(200) NOT NULL,
+  datos          JSONB NOT NULL DEFAULT 'null',
+  actualizado_el TIMESTAMP DEFAULT NOW(),
+  PRIMARY KEY (empresa_id, clave)
+);
+CREATE INDEX IF NOT EXISTS idx_app_kv_empresa ON app_kv(empresa_id);
+
+-- ═══════════════════════════════════════════════════════════
+-- Correo / SMTP por empresa + bandeja de salida (outbox)
+-- ═══════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS correo_config (
+  empresa_id     VARCHAR(50) PRIMARY KEY REFERENCES empresas(id) ON DELETE CASCADE,
+  config         JSONB NOT NULL DEFAULT '{}',
+  actualizado_el TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS correo_outbox (
+  id          VARCHAR(50) PRIMARY KEY,
+  empresa_id  VARCHAR(50) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+  para        VARCHAR(300),
+  cc          VARCHAR(300),
+  asunto      VARCHAR(500),
+  cuerpo      TEXT,
+  adjuntos    JSONB DEFAULT '[]',
+  estado      VARCHAR(30) DEFAULT 'pendiente',
+  error       TEXT,
+  creado_el   TIMESTAMP DEFAULT NOW(),
+  enviado_el  TIMESTAMP,
+  creado_por  VARCHAR(50)
+);
+CREATE INDEX IF NOT EXISTS idx_correo_outbox_empresa ON correo_outbox(empresa_id);
