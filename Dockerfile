@@ -1,6 +1,7 @@
 # Único servicio "mattika-app": Express sirve el FRONTEND estático + la API /api/.
-# IMPORTANTE: el build context debe ser la RAÍZ del repo (no backend/),
-# para poder copiar tanto backend/ como el frontend (index.html, *.jsx, styles.css, assets).
+# Vive en la RAÍZ del repo (donde EasyPanel busca el Dockerfile por defecto) y el
+# build context es también la raíz, para copiar tanto backend/ como el frontend
+# (index.html, *.jsx, styles.css, assets).
 FROM node:20-alpine
 WORKDIR /app
 
