@@ -130,16 +130,20 @@
   let snapUsu = new Map(); // id → snapUsuEntry (estado conocido en el server)
   let snapEmp = new Map(); // id → snapEmpEntry
   const permisosIguales = (a, b) => JSON.stringify(a || {}) === JSON.stringify(b || {});
+  const LOG = (...a) => { try { console.log('%c[mattika-sync]', 'color:#1E4FD4;font-weight:bold', ...a); } catch (e) {} };
 
   // ── Espejo de USUARIOS (diff vs snapshot) ───────────────────────
   async function mirrorUsuarios(nextArr) {
     const me = sesionActual();
-    if (!getToken() || !me) return;
+    if (!getToken() || !me) { LOG('mirrorUsuarios ABORTADO — token?', !!getToken(), 'sesion?', !!me); return; }
     const isMaster = me.tipo === 'master';
     // En sesión de empresa solo se tocan los usuarios de ESA empresa (el POST
     // usa req.user.empresaId; mandar otros crearía usuarios ajenos por error).
     const next = (nextArr || []).filter((u) => isMaster || u.empresaId === me.empresaId);
     const nextIds = new Set(next.map((u) => u.id));
+    LOG('mirrorUsuarios — tipo:', me.tipo, 'empresaId sesión:', me.empresaId,
+        '| en blob:', (nextArr || []).length, '| en scope:', next.length,
+        '| snapshot:', snapUsu.size, '| ids scope:', next.map((u) => u.id + '/' + u.empresaId).join(', '));
 
     for (const u of next) {
       const prev = snapUsu.get(u.id);
@@ -150,16 +154,17 @@
         if (isMaster) body.empresaId = u.empresaId;
         try {
           await api('/api/usuarios', { method: 'POST', body: JSON.stringify(body) });
+          LOG('✓ CREADO usuario', u.usuario, '(' + u.id + ')');
           if (u.activo === false) await api('/api/usuarios/' + encodeURIComponent(u.id), { method: 'PUT', body: JSON.stringify({ activo: false }) });
-        } catch (e) { /* 409 dup u otros: se reintenta en el próximo guardado */ }
+        } catch (e) { LOG('✗ FALLÓ crear usuario', u.usuario, '(' + u.id + ') →', e.status, e.message); }
       } else {
         const changed = prev.nombre !== u.nombre || prev.rol !== u.rol ||
           prev.activo !== (u.activo !== false) || !permisosIguales(prev.permisos, u.permisos);
         if (changed) {
-          try { await api('/api/usuarios/' + encodeURIComponent(u.id), { method: 'PUT', body: JSON.stringify({ nombre: u.nombre, rol: u.rol, activo: u.activo !== false, permisos: u.permisos || {} }) }); } catch (e) {}
+          try { await api('/api/usuarios/' + encodeURIComponent(u.id), { method: 'PUT', body: JSON.stringify({ nombre: u.nombre, rol: u.rol, activo: u.activo !== false, permisos: u.permisos || {} }) }); LOG('✓ actualizado', u.usuario); } catch (e) { LOG('✗ falló actualizar', u.usuario, '→', e.status, e.message); }
         }
         if (u.clave && u.clave !== prev.clave) {
-          try { await api('/api/usuarios/' + encodeURIComponent(u.id) + '/password', { method: 'PUT', body: JSON.stringify({ password: u.clave }) }); } catch (e) {}
+          try { await api('/api/usuarios/' + encodeURIComponent(u.id) + '/password', { method: 'PUT', body: JSON.stringify({ password: u.clave }) }); LOG('✓ clave cambiada', u.usuario); } catch (e) { LOG('✗ falló cambiar clave', u.usuario, '→', e.status, e.message); }
         }
       }
     }
@@ -212,7 +217,8 @@
   // meArg: la sesión que se está estableciendo (en login aún no está guardada).
   async function hydrateIdentity(meArg) {
     const me = meArg || sesionActual();
-    if (!getToken() || !me) return;
+    if (!getToken() || !me) { LOG('hydrateIdentity omitido — token?', !!getToken(), 'sesion?', !!me); return; }
+    LOG('hydrateIdentity — tipo:', me.tipo, 'empresaId:', me.empresaId);
     // El server NUNCA devuelve la contraseña (solo el hash). Pero la UI muestra
     // y edita la clave en texto ("Ver claves"), guardada en localStorage. Al
     // hidratar preservamos la clave local conocida por id, para no vaciarla
@@ -307,6 +313,7 @@
     }
 
     let res;
+    LOG('login → POST /api/auth/login empresaId:', empresaId, 'usuario:', usr);
     try {
       res = await api('/api/auth/login', {
         method: 'POST',
@@ -314,8 +321,9 @@
       });
     } catch (e) {
       // 401 = credenciales incorrectas (no caer a local: rompería la centralización).
-      if (e.status === 401) return { ok: false, error: 'Usuario o clave incorrectos.' };
+      if (e.status === 401) { LOG('login 401 — credenciales incorrectas'); return { ok: false, error: 'Usuario o clave incorrectos.' }; }
       // Backend caído / 5xx → fallback al login local para no bloquear la operación.
+      LOG('⚠️ login FALLÓ contra servidor →', e.status, e.message, '— cayendo a login LOCAL (SIN sincronización)');
       if (window.autenticar) {
         const local = window.autenticar({ empresa: empRaw, usuario: usr, clave: clave });
         if (local.ok) { console.warn('[mattika-sync] backend no disponible; login local (sin sincronización).'); return local; }
@@ -328,6 +336,7 @@
     const user = res && res.user;
     if (!token || !user) return { ok: false, error: 'Respuesta inválida del servidor.' };
     setToken(token);
+    LOG('✓ login OK contra servidor — token guardado, tipo:', user.tipo, 'empresaId:', user.empresaId);
 
     const emps = (window.loadEmpresas && window.loadEmpresas()) || [];
     const emp = empObj || emps.find(function (e) { return e.id === user.empresaId; });
