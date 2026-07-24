@@ -184,36 +184,6 @@ const ScreenLotesAdmin = ({ onToast, onGoto }) => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(lotes)); } catch (e) {}
   }, [lotes, STORAGE_KEY]);
 
-  // Load lotes from API on mount
-  React.useEffect(() => {
-    if (!window.apiClient) return;
-    const proy = window.getProyectoActual?.();
-    const eta  = window.getEtapaActual?.();
-    if (!proy?.id) return;
-    const q = `proyectoId=${encodeURIComponent(proy.id)}` + (eta?.id ? `&etapaId=${encodeURIComponent(eta.id)}` : '');
-    window.apiClient(`/api/lotes?${q}`).then(data => {
-      if (!data?.length) return;
-      const mapped = data.map(l => ({
-        id: `${l.manzana}${parseInt(l.numero)||l.numero}`,
-        codigo: l.codigo || `${l.manzana}${parseInt(l.numero)||l.numero}`,
-        manzana: l.manzana,
-        numero: parseInt(l.numero) || l.numero,
-        etapa: l.etapa_id || '',
-        tipologia: l.tipologia || 'Lote Residencial',
-        m2: parseFloat(l.area) || 0,
-        frente: parseFloat(l.frente) || 0,
-        fondo: parseFloat(l.fondo) || 0,
-        lder: parseFloat(l.l_der) || 0,
-        lizq: parseFloat(l.l_izq) || 0,
-        precio: parseFloat(l.precio) || 0,
-        estado: l.estado ? (l.estado.charAt(0).toUpperCase() + l.estado.slice(1)) : 'Disponible',
-        _apiId: l.id,
-      }));
-      setLotes(mapped);
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped)); } catch (e) {}
-    }).catch(() => {});
-  }, []);
-
   const [proyecto, setProyecto] = React.useState(window.getProyectoActual?.()?.nombre || PROYECTOS[0]);
   const puedeEditar = window.can?.('editar_lotes') ?? false;
   const [busqueda, setBusqueda] = React.useState('');
@@ -316,27 +286,10 @@ const ScreenLotesAdmin = ({ onToast, onGoto }) => {
     }
   };
 
-  const importarLotes = (imported) => {
-    setLotes(imported);
+  const importarLotes = (nuevosLotes) => {
+    setLotes(nuevosLotes);
     setImportOpen(false);
-    onToast?.(`${imported.length} lotes importados`);
-    // After setLotes in the import handler:
-    if (window.apiClient) {
-      const proy = window.getProyectoActual?.();
-      const eta  = window.getEtapaActual?.();
-      const payload = imported.map(l => ({
-        manzana: l.manzana, numero: String(l.numero), codigo: l.codigo,
-        area: l.m2, frente: l.frente, fondo: l.fondo,
-        lDer: l.lder, lIzq: l.lizq, precio: l.precio,
-        estado: (l.estado||'Disponible').toLowerCase(),
-        tipologia: l.tipologia,
-        proyectoId: proy?.id, etapaId: eta?.id,
-      }));
-      window.apiClient('/api/lotes/bulk', {
-        method: 'POST',
-        body: JSON.stringify({ lotes: payload, proyectoId: proy?.id, etapaId: eta?.id, modo: 'merge' }),
-      }).catch(() => {});
-    }
+    onToast?.(`${nuevosLotes.length} lotes importados`);
   };
 
   return (

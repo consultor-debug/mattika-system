@@ -13,31 +13,6 @@ const EMPRESAS_KEY = 'mattika.empresas.v1';
 const USUARIOS_KEY = 'mattika.usuarios.v1';
 const SESION_KEY   = 'mattika.sesion.v1';
 
-// ── API helpers ─────────────────────────────────────────────────
-const _apiBase = () => window.MATTIKA_API || null;
-
-async function _apiLogin({ empresaId, username, password }) {
-  const base = _apiBase();
-  if (!base) return null;
-  const r = await fetch(`${base}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ empresaId, username, password }),
-  });
-  if (r.status === 401) return { _apiError: 'Usuario o clave incorrectos.' };
-  if (!r.ok) return { _apiError: 'Error del servidor. Intenta de nuevo.' };
-  return r.json();
-}
-
-async function _apiFetchEmpresas() {
-  const base = _apiBase();
-  if (!base) return null;
-  try {
-    const r = await fetch(`${base}/api/auth/empresas`);
-    return r.ok ? r.json() : null;
-  } catch (e) { return null; }
-}
-
 // ── Empresas de arranque ────────────────────────────────────────
 // Cada empresa puede tener N proyectos, y cada proyecto N etapas.
 // Estados de proyecto: 'planificacion' | 'preventa' | 'en-obra' | 'entregado' | 'pausado'
@@ -235,57 +210,17 @@ function saveSesion(s) {
 
 // ── Autenticación ───────────────────────────────────────────────
 // Devuelve { ok:true, sesion } o { ok:false, error:'mensaje' }.
-// Intenta el backend primero; si no está disponible, cae a localStorage.
-async function autenticar({ empresa, usuario, clave }) {
+function autenticar({ empresa, usuario, clave }) {
   const empNorm = (empresa || '').trim().toLowerCase();
   const usrNorm = (usuario || '').trim().toLowerCase();
   if (!empNorm || !usrNorm || !clave) return { ok:false, error:'Completa todos los campos para continuar.' };
 
-  // ── Intento API ────────────────────────────────────────────────
-  if (_apiBase()) {
-    try {
-      let empresaId = empNorm === 'mattika' ? 'mattika' : null;
-      if (!empresaId) {
-        const apiEmps = await _apiFetchEmpresas();
-        if (apiEmps) {
-          const found = apiEmps.find(e =>
-            e.nombre.toLowerCase() === empNorm || e.id.toLowerCase() === empNorm
-          );
-          empresaId = found ? found.id : empNorm;
-        } else {
-          empresaId = empNorm;
-        }
-      }
-      const result = await _apiLogin({ empresaId, username: usrNorm, password: clave });
-      if (result && !result._apiError) {
-        const { token, user } = result;
-        return {
-          ok: true,
-          sesion: {
-            tipo: user.tipo || 'empresa',
-            empresaId: user.empresaId,
-            usuarioId: user.id,
-            nombre: user.nombre,
-            rol: user.rol,
-            permisos: user.permisos || {},
-            empresaNombre: user.empresaNombre,
-            empresaColor: user.empresaColor,
-            token,
-            inicioMs: Date.now(),
-          },
-        };
-      }
-      if (result?._apiError) return { ok:false, error: result._apiError };
-    } catch (e) {
-      console.warn('[Mattika] API login falló, usando localStorage:', e.message);
-    }
-  }
-
-  // ── Fallback localStorage ──────────────────────────────────────
+  // Master
   if (empNorm === MASTER_EMPRESA && usrNorm === MASTER_USUARIO && clave === MASTER_CLAVE) {
     return { ok:true, sesion:{ tipo:'master', empresaId:null, usuarioId:'master', nombre:'Mattika · Owner', rol:'Master', inicioMs: Date.now() } };
   }
 
+  // Empresa
   const empresas = loadEmpresas();
   const emp = empresas.find(e =>
     e.nombre.toLowerCase() === empNorm ||
@@ -340,15 +275,8 @@ const LoginScreen = ({ onLogin }) => {
   const [loading, setLoading] = React.useState(false);
   const [hintOpen, setHintOpen] = React.useState(false);
 
-  // Cargar empresas activas para el desplegable (API primero, localStorage fallback)
-  const [empresasActivas, setEmpresasActivas] = React.useState(() => loadEmpresas().filter(e => e.activa));
-  React.useEffect(() => {
-    _apiFetchEmpresas().then(apiEmps => {
-      if (apiEmps && apiEmps.length) {
-        setEmpresasActivas(apiEmps.map(e => ({ ...e, activa: true })));
-      }
-    }).catch(() => {});
-  }, []);
+  // Cargar empresas activas para el desplegable
+  const empresasActivas = React.useMemo(() => loadEmpresas().filter(e => e.activa), []);
 
   // Pre-rellenar último empresa/usuario (no la clave) si recordó el login
   React.useEffect(() => {
@@ -362,12 +290,13 @@ const LoginScreen = ({ onLogin }) => {
     } catch (e) {}
   }, []);
 
-  const submit = async (ev) => {
+  const submit = (ev) => {
     ev?.preventDefault?.();
     setError(null);
     setLoading(true);
-    try {
-      const res = await autenticar({ empresa, usuario, clave });
+    // Pequeño delay para que se sienta como una validación real
+    setTimeout(() => {
+      const res = autenticar({ empresa, usuario, clave });
       setLoading(false);
       if (!res.ok) { setError(res.error); return; }
       if (recuerda) {
@@ -376,10 +305,7 @@ const LoginScreen = ({ onLogin }) => {
         try { localStorage.removeItem('mattika.last-login.v1'); } catch (e) {}
       }
       onLogin(res.sesion);
-    } catch (e) {
-      setLoading(false);
-      setError('Error inesperado. Intenta de nuevo.');
-    }
+    }, 450);
   };
 
   const llenarDemo = (empName, user, pass) => {
@@ -1147,12 +1073,6 @@ Object.assign(window, {
     const s = loadSesion();
     if (!s) return _permTodos(false);
     if (s.tipo === 'master') return _permTodos(true);
-    // Si el token trajo permisos (sesion API), usarlos directamente
-    if (s.permisos && Object.keys(s.permisos).length) {
-      const out = {};
-      for (const k of PERMISOS_KEYS) out[k] = !!s.permisos[k];
-      return out;
-    }
     const u = loadUsuarios().find(x => x.id === s.usuarioId) || { rol: s.rol };
     return resolverPermisos(u);
   },
@@ -1161,11 +1081,19 @@ Object.assign(window, {
     const s = loadSesion();
     if (!s) return false;
     if (s.tipo === 'master') return true;
-    // Si el token trajo permisos, usarlos directamente
-    if (s.permisos && Object.keys(s.permisos).length) return !!s.permisos[perm];
     const u = loadUsuarios().find(x => x.id === s.usuarioId) || { rol: s.rol };
     return !!resolverPermisos(u)[perm];
   },
+  // ¿El usuario en sesión solo debe ver SUS propias ventas/clientes/pagos?
+  // El rol "Asesor" está acotado a su propia cartera; el resto ve todo el equipo.
+  esAsesorRestringido: () => {
+    const s = loadSesion();
+    if (!s || s.tipo !== 'empresa') return false;
+    const u = loadUsuarios().find(x => x.id === s.usuarioId);
+    const rol = (u && u.rol) || s.rol;
+    return rol === 'Asesor';
+  },
+  getUsuarioId: () => loadSesion()?.usuarioId || null,
   // ── Clave de alcance (scope) ─────────────────────────────────
   // Identifica de forma única el contexto activo: empresa · proyecto · etapa.
   // TODO el dato comercial (plano, polígonos, reservas, lista de lotes) se

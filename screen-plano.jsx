@@ -95,6 +95,20 @@ function saveReservas(map) {
   try { localStorage.setItem(`${RESERVAS_STORAGE_KEY}.${_scope()}`, JSON.stringify(map)); } catch (e) {}
 }
 
+// Lotes marcados como "transparentes" (no comerciales: parques, vías, áreas
+// comunes marcadas por error). Se guardan por alcance como lista de ids.
+const TRANSPARENTES_KEY = 'mattika.transparentes.v1';
+function loadTransparentes() {
+  try {
+    const raw = localStorage.getItem(`${TRANSPARENTES_KEY}.${_scope()}`);
+    const a = raw ? JSON.parse(raw) : [];
+    return Array.isArray(a) ? a : [];
+  } catch (e) { return []; }
+}
+function saveTransparentes(arr) {
+  try { localStorage.setItem(`${TRANSPARENTES_KEY}.${_scope()}`, JSON.stringify(arr)); } catch (e) {}
+}
+
 // "Base de datos" demo de RENIEC. En producción se reemplaza por la
 // integración real. Si el DNI no está en la base, devuelve "no
 // encontrado" para que el usuario digite a mano sin que la API
@@ -170,79 +184,16 @@ function saveLotesExtra(arr) {
 // ESTADOS — Mattika tokens
 // ═══════════════════════════════════════════════════════════════
 const ESTADO_TOKENS = {
-  disponible: { fill:'#dfe7f9', stroke:'#3b67d0', text:'#0F2A6B', label:'Disponible' },
-  separado:   { fill:'#fbedd5', stroke:'#A86A12', text:'#5C3A0E', label:'Separado' },
-  vendido:    { fill:'#d4d8e0', stroke:'#7a8398', text:'#3a3f4d', label:'Vendido' },
-  bloqueado:  { fill:'#1f2a44', stroke:'#0B1A33', text:'#E8EDF7', label:'No disponible' },
+  // Convención estándar de planos: VERDE = libre, ÁMBAR = separado, ROJO = vendido.
+  disponible: { fill:'#a7e3bf', stroke:'#12914e', text:'#0a4f2e', label:'Disponible' },
+  separado:   { fill:'#fbd083', stroke:'#cf850f', text:'#6d4406', label:'Separado' },
+  vendido:    { fill:'#f0a9a4', stroke:'#bd3328', text:'#6f1c16', label:'Vendido' },
+  bloqueado:  { fill:'#3a4358', stroke:'#222b3d', text:'#E8EDF7', label:'No disponible' },
 };
 
 // Util de moneda en soles
 const fmtPEN  = (n) => new Intl.NumberFormat('es-PE', { style:'currency', currency:'PEN', maximumFractionDigits:0 }).format(n);
 const fmtPENc = (n) => new Intl.NumberFormat('es-PE', { style:'currency', currency:'PEN', maximumFractionDigits:2 }).format(n);
-
-const descargarCotizacionPDF = ({ lote, fin, modo, enganchePct, plazo, tasa, precioContado, descuento, onToast }) => {
-  const proy = window.getProyectoActual?.()?.nombre || 'Proyecto';
-  const empresa = window.getEmpresa?.()?.nombre || '';
-  const fecha = new Date().toLocaleDateString('es-PE', { day:'2-digit', month:'long', year:'numeric' });
-  const html = `
-    <div style="font-family:Arial,sans-serif;color:#0B1A33;padding:32px;max-width:700px;margin:0 auto">
-      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #1E4FD4;padding-bottom:12px;margin-bottom:24px">
-        <div>
-          <div style="font-size:22px;font-weight:700;color:#1E4FD4">${empresa || 'Mattika'}</div>
-          <div style="font-size:13px;color:#666">Sistema de Gestión Inmobiliaria</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-size:16px;font-weight:600">COTIZACIÓN</div>
-          <div style="font-size:12px;color:#666">${fecha}</div>
-        </div>
-      </div>
-
-      <div style="background:#f5f7ff;border-radius:8px;padding:16px;margin-bottom:20px">
-        <div style="font-size:14px;font-weight:600;margin-bottom:4px;color:#1E4FD4">${proy}</div>
-        <div style="font-size:20px;font-weight:700">Lote ${lote.id} · Manzana ${lote.manzana || ''}</div>
-        <div style="color:#666;margin-top:4px">${lote.m2 || lote.area || ''} m² · Precio de lista: ${fmtPEN(lote.precio)}</div>
-      </div>
-
-      ${modo === 'contado' ? `
-      <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
-        <tr style="background:#1E4FD4;color:#fff"><td colspan="2" style="padding:10px 14px;font-weight:600;border-radius:6px 6px 0 0">Pago al contado</td></tr>
-        <tr style="border-bottom:1px solid #e8edf7"><td style="padding:10px 14px">Precio de lista</td><td style="padding:10px 14px;text-align:right">${fmtPEN(lote.precio)}</td></tr>
-        ${descuento > 0 ? `<tr style="border-bottom:1px solid #e8edf7;color:#d92b2b"><td style="padding:10px 14px">Descuento adicional</td><td style="padding:10px 14px;text-align:right">−${fmtPEN(descuento)}</td></tr>` : ''}
-        <tr style="background:#f5f7ff;font-weight:700;font-size:16px"><td style="padding:12px 14px;border-radius:0 0 0 6px">Total al contado</td><td style="padding:12px 14px;text-align:right;border-radius:0 0 6px 0">${fmtPEN(precioContado)}</td></tr>
-      </table>
-      ` : `
-      <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
-        <tr style="background:#1E4FD4;color:#fff"><td colspan="2" style="padding:10px 14px;font-weight:600;border-radius:6px 6px 0 0">Financiamiento a ${plazo} meses · Tasa ${tasa.toFixed(1)}% anual</td></tr>
-        <tr style="border-bottom:1px solid #e8edf7"><td style="padding:10px 14px">Precio de lista</td><td style="padding:10px 14px;text-align:right">${fmtPEN(lote.precio)}</td></tr>
-        ${descuento > 0 ? `<tr style="border-bottom:1px solid #e8edf7;color:#d92b2b"><td style="padding:10px 14px">Descuento adicional</td><td style="padding:10px 14px;text-align:right">−${fmtPEN(descuento)}</td></tr>` : ''}
-        <tr style="border-bottom:1px solid #e8edf7"><td style="padding:10px 14px">Inicial (${enganchePct}%)</td><td style="padding:10px 14px;text-align:right">${fmtPEN(fin.enganche)}</td></tr>
-        <tr style="border-bottom:1px solid #e8edf7"><td style="padding:10px 14px">Saldo a financiar</td><td style="padding:10px 14px;text-align:right">${fmtPEN(fin.montoFinanciado)}</td></tr>
-        <tr style="border-bottom:1px solid #e8edf7;color:#666"><td style="padding:10px 14px">Intereses totales</td><td style="padding:10px 14px;text-align:right">${fmtPEN(fin.intereses)}</td></tr>
-        <tr style="background:#f5f7ff;border-bottom:1px solid #e8edf7"><td style="padding:10px 14px;font-weight:600">Cuota mensual</td><td style="padding:10px 14px;text-align:right;font-weight:600;font-size:18px;color:#1E4FD4">${fmtPENc(fin.mensualidad)}</td></tr>
-        <tr style="background:#f5f7ff;font-weight:700;font-size:16px"><td style="padding:12px 14px;border-radius:0 0 0 6px">Total a pagar</td><td style="padding:12px 14px;text-align:right;border-radius:0 0 6px 0">${fmtPEN(fin.totalPagado)}</td></tr>
-      </table>
-      `}
-
-      <div style="font-size:11px;color:#999;border-top:1px solid #e8edf7;padding-top:12px;margin-top:8px">
-        Cálculo referencial sujeto a evaluación crediticia. Precios en Soles (S/).
-        Esta cotización es válida por 7 días calendario desde la fecha de emisión.
-      </div>
-    </div>
-  `;
-  const el = document.createElement('div');
-  el.innerHTML = html;
-  document.body.appendChild(el);
-  window.html2pdf().set({
-    margin: 0,
-    filename: `Cotizacion_Lote_${lote.id}.pdf`,
-    image: { type:'jpeg', quality:0.98 },
-    html2canvas: { scale:2 },
-    jsPDF: { unit:'mm', format:'a4', orientation:'portrait' },
-  }).from(el).save().then(() => {
-    document.body.removeChild(el);
-    onToast('Cotización descargada');
-  });
-};
 
 function calcFinanciamiento({ precio, enganchePct, plazoMeses, tasaAnual }) {
   const enganche = precio * (enganchePct / 100);
@@ -356,7 +307,8 @@ const PlanoViewer = ({ lotes, selectedId, onSelect, filter, editMode, vertOverri
   };
 
   const renderLote = (l) => {
-    const t = ESTADO_TOKENS[l.estado];
+    const transp = l._transparente;
+    const t = ESTADO_TOKENS[l.estado] || ESTADO_TOKENS.disponible;
     const isHover = hover === l.id;
     const isSel = selectedId === l.id;
     const dim = !matches(l);
@@ -379,15 +331,16 @@ const PlanoViewer = ({ lotes, selectedId, onSelect, filter, editMode, vertOverri
            if (editMode) onSelect(l.id);
            else if (l.estado !== 'bloqueado') onSelect(l.id);
          }}
-         opacity={dim ? 0.10 : 0.72}>
+         opacity={dim ? 0.10 : (transp && !isSel ? (editMode ? 0.5 : 0.18) : 0.88)}>
         <polygon
           data-lote={l.id}
           points={points}
-          fill={t.fill}
-          stroke={isSel ? (editMode ? 'var(--brand)' : '#0B1A33') : t.stroke}
-          strokeWidth={isSel ? 4 : isHover ? 2.5 : 1}
+          fill={transp ? 'transparent' : t.fill}
+          stroke={isSel ? (editMode ? 'var(--brand)' : '#0B1A33') : (transp ? 'rgba(110,110,120,.55)' : t.stroke)}
+          strokeWidth={isSel ? 4 : isHover ? 2.8 : 1.5}
+          strokeDasharray={transp ? '6 5' : undefined}
         />
-        {bbW > 22 && bbH > 16 && (() => {
+        {!transp && bbW > 22 && bbH > 16 && (() => {
           const label = `${l.manzana}${l.numero}`;
           const fs = 20; // tamaño uniforme para TODAS las etiquetas
           return (
@@ -698,7 +651,17 @@ const PlanoViewer = ({ lotes, selectedId, onSelect, filter, editMode, vertOverri
 // ═══════════════════════════════════════════════════════════════
 // COTIZADOR — panel lateral con simulador
 // ═══════════════════════════════════════════════════════════════
-const Cotizador = ({ lote, reserva, puedeVender = true, onGenerarVenta, onApartar, onCancelarReserva, onToast }) => {
+const Cotizador = ({ lote, reserva, puedeVender = true, onGenerarVenta, onApartar, onCancelarReserva, onToast,
+                     onSepararLote, onMarcarVendido, onToggleBloqueado, onToggleTransparente, esBloqueado, esTransparente }) => {
+  const [accionesOpen, setAccionesOpen] = React.useState(false);
+  const accionesRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!accionesOpen) return;
+    const h = (e) => { if (accionesRef.current && !accionesRef.current.contains(e.target)) setAccionesOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [accionesOpen]);
+  const accion = (fn) => () => { setAccionesOpen(false); fn && fn(); };
   // Cargar condiciones comerciales (configurables desde Admin → Condiciones Comerciales)
   const [cond] = React.useState(() => loadCondiciones());
 
@@ -817,7 +780,8 @@ const Cotizador = ({ lote, reserva, puedeVender = true, onGenerarVenta, onAparta
   const separado = lote.estado === 'separado';
   // Aplicar descuento al precio antes de los cálculos
   const precioNeto = Math.max(0, lote.precio - descuento);
-  const fin = calcFinanciamiento({ precio: precioNeto, enganchePct: precioNeto ? (enganche / precioNeto) * 100 : 0, plazoMeses: plazo, tasaAnual: tasa });
+  const plazoCalc = plazo || 1;
+  const fin = calcFinanciamiento({ precio: precioNeto, enganchePct: precioNeto ? (enganche / precioNeto) * 100 : 0, plazoMeses: plazoCalc, tasaAnual: tasa });
   const descContado = precioNeto * (prontoPagoPct / 100);
   const precioContado = precioNeto - descContado;
   const descPct = lote.precio ? (descuento / lote.precio) * 100 : 0;
@@ -1066,13 +1030,29 @@ const Cotizador = ({ lote, reserva, puedeVender = true, onGenerarVenta, onAparta
               <div className="cot-control">
                 <div className="cot-control-row">
                   <label>Plazo</label>
-                  <span className="cot-control-val">{plazo} meses (máx {cond.plazoMaximo})</span>
+                  <div className="cot-plazo-entry">
+                    <input type="number" min={1} max={cond.plazoMaximo} step={1}
+                           value={plazo}
+                           onChange={(e) => {
+                             const raw = e.target.value;
+                             if (raw === '') { setPlazo(''); return; }
+                             const v = parseInt(raw, 10);
+                             if (Number.isFinite(v)) setPlazo(Math.min(cond.plazoMaximo, Math.max(1, v)));
+                           }}
+                           onBlur={(e) => {
+                             let v = parseInt(e.target.value, 10);
+                             if (!Number.isFinite(v) || v < 1) v = 1;
+                             setPlazo(Math.min(cond.plazoMaximo, v));
+                           }}/>
+                    <span>meses</span>
+                  </div>
                 </div>
                 <div className="cot-chips">
-                  {[12, 24, 36, 48, 60, 72].filter(p => p <= cond.plazoMaximo).map((p) => (
+                  {[6, 12, 18, 24, 30, 36, 42, 48, 54, 60, 66, 72].filter(p => p <= cond.plazoMaximo).map((p) => (
                     <button key={p} className={plazo === p ? 'on' : ''} onClick={() => setPlazo(p)}>{p}</button>
                   ))}
                 </div>
+                <div className="cot-control-hint">Máximo {cond.plazoMaximo} meses · escríbelo o usa los botones (cada 6 meses)</div>
               </div>
 
               <div className="cot-control">
@@ -1088,7 +1068,7 @@ const Cotizador = ({ lote, reserva, puedeVender = true, onGenerarVenta, onAparta
               <div className="cot-mensualidad">
                 <div className="cot-mensualidad-label">Cuota mensual estimada</div>
                 <div className="cot-mensualidad-num">{fmtPENc(fin.mensualidad)}</div>
-                <div className="cot-mensualidad-sub">por {plazo} meses</div>
+                <div className="cot-mensualidad-sub">por {plazoCalc} meses</div>
               </div>
 
               <div className="cot-bigrow"><span>Precio de lista</span><span className="num">{fmtPEN(lote.precio)}</span></div>
@@ -1151,17 +1131,41 @@ const Cotizador = ({ lote, reserva, puedeVender = true, onGenerarVenta, onAparta
                     )}
                   </div>
                 </div>
-                <button className="btn block" onClick={() => descargarCotizacionPDF({ lote, fin, modo, enganchePct, plazo, tasa, precioContado, descuento, onToast })}>
+                <button className="btn block" onClick={() => onToast('Cotización descargada')}>
                   <Icon name="download" size={14}/> Descargar cotización (PDF)
                 </button>
               </>
             ) : (
               <>
                 {puedeVender ? (<>
-                {/* CTA principal: flujo rápido — solo 3 datos */}
-                <button className="btn primary block lg" onClick={onApartar}>
-                  <Icon name="sparkle" size={14}/> Apartar / Vender lote
-                </button>
+                {/* CTA principal + menú de acciones del lote */}
+                <div className="hstack gap-8" style={{alignItems:'stretch'}}>
+                  <button className="btn primary block lg" style={{flex:1}} onClick={onApartar}>
+                    <Icon name="sparkle" size={14}/> Apartar / Vender lote
+                  </button>
+                  <div className="lote-acciones-wrap" ref={accionesRef}>
+                    <button className="lote-acciones-btn" title="Más acciones del lote"
+                            onClick={() => setAccionesOpen(o => !o)}>
+                      <Icon name="sliders" size={18}/>
+                    </button>
+                    {accionesOpen && (
+                      <div className="lote-acciones-menu">
+                        <button className="lote-acc-item" onClick={accion(onSepararLote)}>
+                          <Icon name="clock" size={17}/> Separar lote
+                        </button>
+                        <button className="lote-acc-item" onClick={accion(onMarcarVendido)}>
+                          <Icon name="tag" size={17}/> Marcar como vendido
+                        </button>
+                        <button className="lote-acc-item" onClick={accion(onToggleBloqueado)}>
+                          <Icon name="lock" size={17}/> {esBloqueado ? 'Habilitar para venta' : 'No disponible para venta'}
+                        </button>
+                        <button className="lote-acc-item" onClick={accion(onToggleTransparente)}>
+                          <Icon name="eye" size={17}/> {esTransparente ? 'Quitar transparencia' : 'Hacer transparente'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <div className="muted text-xs center" style={{padding:'2px 0', lineHeight:1.4}}>
                   Solo pide DNI, teléfono y correo · documentos luego
                 </div>
@@ -1171,7 +1175,7 @@ const Cotizador = ({ lote, reserva, puedeVender = true, onGenerarVenta, onAparta
                   <Icon name="doc" size={13}/>
                   <span>
                     Generar venta con documentos
-                    <small>Cliente con todos los datos · 6 documentos</small>
+                    <small>Cliente con todos los datos · {(window.docTypesForPack?.(window.loadTemplate?.())||[]).length||6} documentos</small>
                   </span>
                 </button>
                 <div className="divider"/>
@@ -1180,7 +1184,7 @@ const Cotizador = ({ lote, reserva, puedeVender = true, onGenerarVenta, onAparta
                     No tienes permiso para apartar o vender lotes. Puedes consultar el precio y enviar la cotización al cliente.
                   </div>
                 )}
-                <button className="btn block" onClick={() => descargarCotizacionPDF({ lote, fin, modo, enganchePct, plazo, tasa, precioContado, descuento, onToast })}>
+                <button className="btn block" onClick={() => onToast('Cotización descargada')}>
                   <Icon name="download" size={14}/> Descargar cotización (PDF)
                 </button>
                 <button className="btn ghost block" onClick={() => {
@@ -1738,18 +1742,146 @@ const QuickSaleModal = ({ lote, initial, onClose, onSave, onToast }) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
+// EXPORTAR PLANO COMO IMAGEN (PNG) — con sello de fecha y hora
+// ═══════════════════════════════════════════════════════════════
+async function exportarPlanoPNG({ nombre, etapa, stats, formato = 'png' }) {
+  const inner = document.querySelector('.plano-inner') || document.querySelector('.sat-pane');
+  if (!inner) return { ok: false, err: 'No hay plano visible para exportar' };
+  if (!window.html2canvas) return { ok: false, err: 'No se pudo cargar el motor de captura' };
+
+  // Capturar el plano en su estado natural (sin el zoom/encuadre actual)
+  const esPlano = inner.classList.contains('plano-inner');
+  const prevTransform = inner.style.transform;
+  const prevTransition = inner.style.transition;
+  const prevW = inner.style.width, prevH = inner.style.height;
+  const prevRight = inner.style.right, prevBottom = inner.style.bottom;
+  inner.style.transition = 'none';
+  if (esPlano) {
+    inner.style.transform = 'none';
+    // Forzar la proporción EXACTA del plano (viewBox) para que la imagen base y
+    // los polígonos coincidan sin deformarse ni desalinearse.
+    const W = inner.clientWidth || inner.offsetWidth || 1000;
+    inner.style.right = 'auto';
+    inner.style.bottom = 'auto';
+    inner.style.width = W + 'px';
+    inner.style.height = Math.round(W * PLANO_VIEWBOX.h / PLANO_VIEWBOX.w) + 'px';
+  }
+  void inner.offsetWidth; // forzar reflow
+
+  try {
+    const shot = await window.html2canvas(inner, {
+      backgroundColor: '#ffffff', useCORS: true, scale: 2, logging: false,
+    });
+    const sc = shot.width / Math.max(1, inner.offsetWidth);
+    const now = new Date();
+    const stamp = now.toLocaleString('es-PE', {
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+    const resumen = stats
+      ? `${(stats.disponible||0)} disponibles · ${(stats.separado||0)} separados · ${(stats.vendido||0)} vendidos`
+      : '';
+    const titulo = `${nombre}${etapa ? '  ·  ' + etapa : ''}`;
+
+    // Footer de 3 líneas apiladas a la izquierda (sin superposición)
+    const fsT = Math.round(26 * sc);   // título
+    const fsS = Math.round(17 * sc);   // resumen
+    const fsD = Math.round(15 * sc);   // fecha
+    const padX = Math.round(34 * sc);
+    const padY = Math.round(20 * sc);
+    const gap = Math.round(11 * sc);
+    const footerH = padY * 2 + fsT + fsS + fsD + gap * 2;
+
+    const out = document.createElement('canvas');
+    out.width = shot.width;
+    out.height = shot.height + footerH;
+    const ctx = out.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.drawImage(shot, 0, 0);
+
+    // Barra inferior
+    ctx.fillStyle = '#13224d';
+    ctx.fillRect(0, shot.height, out.width, footerH);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    let y = shot.height + padY;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `700 ${fsT}px Montserrat, Arial, sans-serif`;
+    ctx.fillText(titulo, padX, y);
+    y += fsT + gap;
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    ctx.font = `500 ${fsS}px Montserrat, Arial, sans-serif`;
+    ctx.fillText(resumen, padX, y);
+    y += fsS + gap;
+    ctx.fillStyle = 'rgba(255,255,255,.62)';
+    ctx.font = `400 ${fsD}px Montserrat, Arial, sans-serif`;
+    ctx.fillText(`Exportado: ${stamp}`, padX, y);
+
+    const p2 = (n) => String(n).padStart(2, '0');
+    const fstamp = `${now.getFullYear()}-${p2(now.getMonth()+1)}-${p2(now.getDate())}_${p2(now.getHours())}${p2(now.getMinutes())}`;
+    const baseName = `Plano-${String(nombre).replace(/\s+/g, '-')}-${fstamp}`;
+
+    if (formato === 'pdf') {
+      const JsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+      if (!JsPDF) return { ok: false, err: 'No se pudo cargar el generador de PDF' };
+      const landscape = out.width >= out.height;
+      const pdf = new JsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'pt', format: 'a4', compress: true });
+      const pw = pdf.internal.pageSize.getWidth();
+      const ph = pdf.internal.pageSize.getHeight();
+      const margin = 24;
+      const ratio = Math.min((pw - margin * 2) / out.width, (ph - margin * 2) / out.height);
+      const w = out.width * ratio, h = out.height * ratio;
+      pdf.addImage(out.toDataURL('image/png'), 'PNG', (pw - w) / 2, (ph - h) / 2, w, h);
+      pdf.save(baseName + '.pdf');
+      return { ok: true };
+    }
+
+    const url = out.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = baseName + '.png';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return { ok: true };
+  } catch (e) {
+    console.error('exportarPlanoPNG', e);
+    return { ok: false, err: e.message || 'Error al capturar' };
+  } finally {
+    inner.style.transform = prevTransform;
+    inner.style.transition = prevTransition;
+    inner.style.width = prevW;
+    inner.style.height = prevH;
+    inner.style.right = prevRight;
+    inner.style.bottom = prevBottom;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // PANTALLA PRINCIPAL
 // ═══════════════════════════════════════════════════════════════
 const ScreenPlano = ({ onNew, onToast }) => {
   const [selectedId, setSelectedId] = React.useState(null);
   const [editMode, setEditMode] = React.useState(false);
+  const [exportandoPlano, setExportandoPlano] = React.useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = React.useState(false);
+  const exportMenuRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!exportMenuOpen) return;
+    const h = (e) => { if (exportMenuRef.current && !exportMenuRef.current.contains(e.target)) setExportMenuOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [exportMenuOpen]);
   const [viewMode, setViewMode] = React.useState('plano'); // 'plano' | 'satelite'
   const [vertOverrides, setVertOverrides] = React.useState(() => loadVertOverrides());
   const [lotesExtra, setLotesExtra] = React.useState(() => loadLotesExtra());
   const [drawing, setDrawing] = React.useState({ active: false, points: [] });
   const [pendingPolygon, setPendingPolygon] = React.useState(null); // {points: [...]}
   const [reservas, setReservas] = React.useState(() => loadReservas());
+  const [transparentes, setTransparentes] = React.useState(() => loadTransparentes());
   const [quickSaleOpen, setQuickSaleOpen] = React.useState(false); // lote a apartar/vender
+  const [quickSaleTipo, setQuickSaleTipo] = React.useState(null); // fuerza tipo en QuickSaleModal
+  const [separarOpen, setSepararOpen] = React.useState(false); // lote a separar (con plazo)
   const [filter, setFilter] = React.useState({
     estado:'todos', m2Min:0, m2Max:9999, precioMin:0, precioMax:9999999, busqueda:'',
   });
@@ -1786,124 +1918,6 @@ const ScreenPlano = ({ onNew, onToast }) => {
     return () => window.removeEventListener('focus', refresh);
   }, [adminKey]);
 
-  // Load lotes from API (overrides localStorage on mount)
-  React.useEffect(() => {
-    if (!window.apiClient) return;
-    const proy = window.getProyectoActual?.();
-    const eta  = window.getEtapaActual?.();
-    if (!proy?.id) return;
-    const q = `proyectoId=${encodeURIComponent(proy.id)}` + (eta?.id ? `&etapaId=${encodeURIComponent(eta.id)}` : '');
-    window.apiClient(`/api/lotes?${q}`).then(data => {
-      if (!data?.length) return;
-      const m = new Map();
-      data.forEach(l => {
-        const num = parseInt(l.numero) || l.numero;
-        m.set(`${l.manzana}-${num}`, {
-          codigo: l.codigo, manzana: l.manzana, numero: num,
-          m2: parseFloat(l.area)||undefined, frente: parseFloat(l.frente)||undefined,
-          fondo: parseFloat(l.fondo)||undefined, lder: parseFloat(l.l_der)||undefined,
-          lizq: parseFloat(l.l_izq)||undefined, precio: parseFloat(l.precio)||undefined,
-          estado: l.estado ? (l.estado.charAt(0).toUpperCase()+l.estado.slice(1)) : 'Disponible',
-          tipologia: l.tipologia, etapa: l.etapa_id||'', _apiId: l.id,
-        });
-      });
-      setAdminLotesMap(m);
-    }).catch(() => {});
-  }, []);
-
-  // Load reservas from API (merges with localStorage)
-  React.useEffect(() => {
-    if (!window.apiClient) return;
-    const proy = window.getProyectoActual?.();
-    const eta  = window.getEtapaActual?.();
-    if (!proy?.id) return;
-    const q = `proyectoId=${encodeURIComponent(proy.id)}` + (eta?.id ? `&etapaId=${encodeURIComponent(eta.id)}` : '');
-    window.apiClient(`/api/reservas?${q}`).then(data => {
-      if (!data?.length) return;
-      const map = {};
-      data.forEach(r => {
-        if (!r.manzana || r.numero == null) return;
-        const planoId = `${r.manzana}-${String(parseInt(r.numero)).padStart(2,'0')}`;
-        map[planoId] = {
-          loteId: planoId, tipo: r.tipo,
-          nombres: r.comprador_nombre, apellidos: r.comprador_apellidos,
-          dni: r.comprador_dni, telefono: r.comprador_telefono, email: r.comprador_correo,
-          fecha: r.creada_el, _apiId: r.id,
-        };
-      });
-      if (Object.keys(map).length) {
-        setReservas(prev => ({ ...map, ...prev }));
-      }
-    }).catch(() => {});
-  }, []);
-
-  // Load plano alignment (polygon overrides + custom lots) from API on mount
-  React.useEffect(() => {
-    if (!window.apiClient) return;
-    const proy = window.getProyectoActual?.();
-    const eta  = window.getEtapaActual?.();
-    if (!proy?.id || !eta?.id) return;
-    window.apiClient(`/api/proyectos/${proy.id}/etapas/${eta.id}/alineacion`).then(data => {
-      if (!data) return;
-      if (data.vertOverrides && Object.keys(data.vertOverrides).length) {
-        setVertOverrides(data.vertOverrides);
-        saveVertOverrides(data.vertOverrides);
-      }
-      if (data.lotesExtra && data.lotesExtra.length) {
-        setLotesExtra(data.lotesExtra);
-        saveLotesExtra(data.lotesExtra);
-      }
-    }).catch(() => {});
-  }, []);
-
-  // Debounced save of plano alignment to API (2s after last change)
-  const _alineacionTimer = React.useRef(null);
-  React.useEffect(() => {
-    if (!window.apiClient) return;
-    const proy = window.getProyectoActual?.();
-    const eta  = window.getEtapaActual?.();
-    if (!proy?.id || !eta?.id) return;
-    clearTimeout(_alineacionTimer.current);
-    _alineacionTimer.current = setTimeout(() => {
-      window.apiClient(`/api/proyectos/${proy.id}/etapas/${eta.id}/alineacion`, {
-        method: 'PATCH',
-        body: JSON.stringify({ vertOverrides, lotesExtra }),
-      }).catch(() => {});
-    }, 2000);
-    return () => clearTimeout(_alineacionTimer.current);
-  }, [vertOverrides, lotesExtra]);
-
-  // Migrate localStorage reservas (without _apiId) to the API
-  React.useEffect(() => {
-    if (!window.apiClient || !adminLotesMap || !adminLotesMap.size) return;
-    const proy = window.getProyectoActual?.();
-    const eta  = window.getEtapaActual?.();
-    if (!proy?.id) return;
-    Object.values(reservas).forEach(r => {
-      if (r._apiId) return;
-      const parts = r.loteId?.split('-');
-      if (!parts || parts.length < 2) return;
-      const manzana = parts[0];
-      const numero  = parseInt(parts[1]);
-      const entry   = adminLotesMap.get(`${manzana}-${numero}`);
-      if (!entry?._apiId) return;
-      window.apiClient('/api/reservas', {
-        method: 'POST',
-        body: JSON.stringify({
-          loteId: entry._apiId, proyectoId: proy.id, etapaId: eta?.id,
-          tipo: r.tipo, compradorNombre: r.nombres, compradorApellidos: r.apellidos,
-          compradorDni: r.dni, compradorTelefono: r.telefono, compradorCorreo: r.email,
-        }),
-      }).then(res => {
-        if (res?.id) setReservas(prev => {
-          const upd = { ...prev, [r.loteId]: { ...prev[r.loteId], _apiId: res.id } };
-          saveReservas(upd);
-          return upd;
-        });
-      }).catch(() => {});
-    });
-  }, [adminLotesMap]);
-
   const allLotes = React.useMemo(() => {
     const estadoMap = { 'Disponible':'disponible', 'Separado':'separado', 'Vendido':'vendido' };
     // Mezcla los datos del Administrador de Lotes (fuente única) sobre la geometría.
@@ -1931,18 +1945,20 @@ const ScreenPlano = ({ onNew, onToast }) => {
     // que el equipo dibuje sobre su propio plano.
     const base  = (seedScope ? LOTES : []).map(applyAdmin);
     const extra = lotesExtra.map(applyAdmin);
-    // Aplicar reservas: separación → estado "separado", venta → "vendido"
+    // Aplicar reservas y estados: vencidas/liberadas → libre, bloqueado, transparente
     const conReservas = [...base, ...extra].map(l => {
+      if (transparentes.includes(l.id)) return { ...l, _transparente: true };
       const r = reservas[l.id];
       if (!r) return l;
-      return {
-        ...l,
-        estado: r.tipo === 'venta' ? 'vendido' : 'separado',
-        reserva: r,
-      };
+      const est = window.reservaEstado ? window.reservaEstado(r) : (r.tipo === 'venta' ? 'convertida' : 'activa');
+      if (r.tipo === 'bloqueado') return { ...l, estado: 'bloqueado', reserva: r };
+      if (est === 'convertida' || r.tipo === 'venta') return { ...l, estado: 'vendido', reserva: r };
+      if (est === 'activa') return { ...l, estado: 'separado', reserva: r };
+      // vencida o liberada → el lote vuelve a estar disponible
+      return l;
     });
     return conReservas;
-  }, [adminLotesMap, lotesExtra, reservas, seedScope]);
+  }, [adminLotesMap, lotesExtra, reservas, transparentes, seedScope]);
 
   const moveVertex = React.useCallback((loteId, idx, x, y) => {
     setVertOverrides(prev => {
@@ -2155,6 +2171,8 @@ const ScreenPlano = ({ onNew, onToast }) => {
         area: String(lote.m2),
         direccion: proy?.ubicacion || '',
         distrito: '', provincia: '', departamento: '',
+        loteId: lote.id,
+        scope: window.getScopeKey?.() || '',
       },
       terminos: {
         precio: cot.modo === 'contado' ? cot.precioContado : lote.precio,
@@ -2185,100 +2203,55 @@ const ScreenPlano = ({ onNew, onToast }) => {
     setReservas(next);
     saveReservas(next);
     setQuickSaleOpen(false);
-    // Sync to API
-    if (window.apiClient) {
-      const lote = allLotes.find(l => l.id === data.loteId);
-      const apiLoteId = lote ? adminLotesMap?.get(`${lote.manzana}-${lote.numero}`)?._apiId : null;
-      if (apiLoteId) {
-        const proy = window.getProyectoActual?.();
-        const eta  = window.getEtapaActual?.();
-        window.apiClient('/api/reservas', {
-          method: 'POST',
-          body: JSON.stringify({
-            loteId: apiLoteId, proyectoId: proy?.id, etapaId: eta?.id,
-            tipo: data.tipo, compradorNombre: data.nombres, compradorApellidos: data.apellidos,
-            compradorDni: data.dni, compradorTelefono: data.telefono,
-            compradorCorreo: data.email, precio: lote?.precio,
-          }),
-        }).then(r => {
-          if (r?.id) setReservas(prev => {
-            const upd = { ...prev, [data.loteId]: { ...prev[data.loteId], _apiId: r.id } };
-            saveReservas(upd);
-            return upd;
-          });
-        }).catch(() => {});
-      }
-    }
-    onToast?.(data.tipo === 'venta'
-      ? `✓ Lote ${data.loteId} marcado como VENDIDO a ${data.nombres}`
-      : `✓ Lote ${data.loteId} apartado para ${data.nombres}`
+    onToast?.(
+      data.tipo === 'venta'
+        ? `✓ Lote ${data.loteId} marcado como VENDIDO a ${data.nombres}`
+        : `✓ Lote ${data.loteId} apartado para ${data.nombres}`
     );
   };
+
+  // ── ACCIONES DE LOTE (menú del cotizador) ─────────────────────
+  const saveSeparacion = (data) => {
+    const next = { ...reservas, [data.loteId]: data };
+    setReservas(next);
+    saveReservas(next);
+    setSepararOpen(false);
+    const vence = data.fechaVence ? new Date(data.fechaVence).toLocaleDateString('es-PE') : '';
+    onToast?.(`✓ Lote ${data.loteId} separado · vence ${vence}`);
+  };
+  const toggleBloqueado = (lote) => {
+    const r = reservas[lote.id];
+    if (r && r.tipo === 'bloqueado') {
+      cancelarReserva(lote.id);
+      onToast?.(`Lote ${lote.id} habilitado para venta`);
+    } else {
+      const next = { ...reservas, [lote.id]: {
+        loteId: lote.id, tipo: 'bloqueado', estado: 'activa',
+        fecha: new Date().toISOString(),
+        asesorNombre: window.getSesion?.()?.nombre || '',
+        historial: [{ accion: 'bloqueado', fecha: new Date().toISOString(), por: window.getSesion?.()?.nombre || 'Sistema' }],
+      }};
+      setReservas(next);
+      saveReservas(next);
+      onToast?.(`Lote ${lote.id} marcado como NO disponible`);
+    }
+  };
+  const toggleTransparente = (lote) => {
+    setTransparentes(prev => {
+      const has = prev.includes(lote.id);
+      const next = has ? prev.filter(x => x !== lote.id) : [...prev, lote.id];
+      saveTransparentes(next);
+      onToast?.(has ? `Lote ${lote.id} visible nuevamente` : `Lote ${lote.id} hecho transparente`);
+      return next;
+    });
+  };
+
   const cancelarReserva = (loteId) => {
-    const apiId = reservas[loteId]?._apiId;
     const next = { ...reservas };
     delete next[loteId];
     setReservas(next);
     saveReservas(next);
-    if (window.apiClient && apiId) {
-      window.apiClient(`/api/reservas/${apiId}`, { method: 'DELETE' }).catch(() => {});
-    }
     onToast?.(`Reserva del Lote ${loteId} cancelada`);
-  };
-
-  const exportarPlano = () => {
-    const svgEl = document.querySelector('.plano-svg');
-    if (!svgEl) { onToast?.('Sin plano para exportar'); return; }
-    onToast?.('Generando imagen…');
-    const W = PLANO_VIEWBOX.w, H = PLANO_VIEWBOX.h;
-    const canvas = document.createElement('canvas');
-    canvas.width = W; canvas.height = H;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#f5f3ee';
-    ctx.fillRect(0, 0, W, H);
-
-    const doDownload = () => {
-      try {
-        const proy = (window.getProyectoActual?.()?.nombre || 'proyecto').replace(/\s+/g, '-');
-        const eta  = (window.getEtapaActual?.()?.nombre  || 'etapa').replace(/\s+/g, '-');
-        const a = document.createElement('a');
-        a.download = `Plano_${proy}_${eta}_${new Date().toISOString().slice(0,10)}.png`;
-        a.href = canvas.toDataURL('image/png');
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        onToast?.('Plano exportado como PNG');
-      } catch(e) { onToast?.('Error al exportar: ' + e.message); }
-    };
-
-    const drawSvg = () => {
-      try {
-        const clone = svgEl.cloneNode(true);
-        clone.setAttribute('width', W);
-        clone.setAttribute('height', H);
-        clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-        // Reemplazar variables CSS que no resuelven en SVG standalone
-        const brand = getComputedStyle(document.documentElement).getPropertyValue('--brand').trim() || '#1E4FD4';
-        clone.querySelectorAll('[stroke]').forEach(el => {
-          if (el.getAttribute('stroke')?.includes('var(--brand)')) el.setAttribute('stroke', brand);
-        });
-        const svgStr = new XMLSerializer().serializeToString(clone);
-        const img = new Image();
-        img.onload = () => { ctx.drawImage(img, 0, 0, W, H); doDownload(); };
-        img.onerror = doDownload;
-        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
-      } catch(e) { doDownload(); }
-    };
-
-    if (planoImg) {
-      const bg = new Image();
-      bg.crossOrigin = 'anonymous';
-      bg.onload = () => { ctx.drawImage(bg, 0, 0, W, H); drawSvg(); };
-      bg.onerror = drawSvg;
-      bg.src = planoImg;
-    } else {
-      drawSvg();
-    }
   };
 
   // Imagen de fondo del plano para el alcance activo (empresa·proyecto·etapa).
@@ -2337,7 +2310,40 @@ const ScreenPlano = ({ onNew, onToast }) => {
               <Icon name="edit" size={14}/> {editMode ? 'Salir de edición' : 'Editar polígonos'}
             </button>
           )}
-          <button className="btn" onClick={exportarPlano}><Icon name="download" size={14}/> Exportar plano</button>
+          <div className="lote-acciones-wrap" ref={exportMenuRef}>
+            <button className="btn" disabled={exportandoPlano} onClick={() => setExportMenuOpen(o => !o)}>
+              {exportandoPlano
+                ? <><span className="spinner"/> Exportando…</>
+                : <><Icon name="download" size={14}/> Exportar plano <Icon name="chevronR" size={12} style={{transform:'rotate(90deg)', opacity:.6}}/></>}
+            </button>
+            {exportMenuOpen && (
+              <div className="lote-acciones-menu" style={{minWidth:210, left:0, right:'auto', top:'calc(100% + 8px)', bottom:'auto'}}>
+                {[['png','Imagen (PNG)','eye'], ['pdf','Documento PDF','doc']].map(([fmt, label, ic]) => (
+                  <button key={fmt} className="lote-acc-item" onClick={async () => {
+                    setExportMenuOpen(false);
+                    setExportandoPlano(true);
+                    onToast?.(`Generando ${fmt.toUpperCase()} del plano…`);
+                    const r = await exportarPlanoPNG({
+                      nombre: window.getProyectoActual?.()?.nombre || 'Proyecto',
+                      etapa: window.getEtapaActual?.()?.nombre || '',
+                      stats, formato: fmt,
+                    });
+                    setExportandoPlano(false);
+                    onToast?.(r.ok ? `✓ Plano exportado en ${fmt.toUpperCase()}` : `✗ ${r.err}`);
+                  }}>
+                    <Icon name={ic} size={16}/> {label}
+                  </button>
+                ))}
+                <button className="lote-acc-item" onClick={() => { setExportMenuOpen(false); window.descargarCSV?.(
+                  `lotes-${(window.getProyectoActual?.()?.nombre || 'plano').replace(/\s+/g,'-').toLowerCase()}-${new Date().toISOString().slice(0,10)}`,
+                  ['Lote','Manzana','N°','Área m²','Precio S/','Precio/m²','Estado','Etapa','Tipología'],
+                  allLotes.map(l => [l.id, l.manzana, l.numero, l.m2, l.precio, l.precioM2, l.estado, l.etapa || '', l.tipologia || ''])
+                ); }}>
+                  <Icon name="docs" size={16}/> Lista de lotes (CSV)
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -2425,6 +2431,12 @@ const ScreenPlano = ({ onNew, onToast }) => {
                           onGenerarVenta={generarVenta}
                           onApartar={() => setQuickSaleOpen(selected)}
                           onCancelarReserva={() => cancelarReserva(selected.id)}
+                          onSepararLote={() => setSepararOpen(selected)}
+                          onMarcarVendido={() => { setQuickSaleTipo('venta'); setQuickSaleOpen(selected); }}
+                          onToggleBloqueado={() => toggleBloqueado(selected)}
+                          onToggleTransparente={() => toggleTransparente(selected)}
+                          esBloqueado={selected && reservas[selected.id]?.tipo === 'bloqueado'}
+                          esTransparente={selected && transparentes.includes(selected.id)}
                           onToast={onToast}/>
           }
         </aside>
@@ -2443,9 +2455,19 @@ const ScreenPlano = ({ onNew, onToast }) => {
       {quickSaleOpen && (
         <QuickSaleModal
           lote={quickSaleOpen}
-          initial={reservas[quickSaleOpen.id] || null}
-          onClose={() => setQuickSaleOpen(false)}
+          initial={reservas[quickSaleOpen.id] || (quickSaleTipo ? { tipo: quickSaleTipo } : null)}
+          onClose={() => { setQuickSaleOpen(false); setQuickSaleTipo(null); }}
           onSave={saveReserva}
+          onToast={onToast}/>
+      )}
+
+      {/* Modal: separar lote con plazo de vencimiento */}
+      {separarOpen && (
+        <SepararLoteModal
+          lote={separarOpen}
+          initial={(reservas[separarOpen.id] && reservas[separarOpen.id].tipo === 'separacion') ? reservas[separarOpen.id] : null}
+          onClose={() => setSepararOpen(false)}
+          onSave={saveSeparacion}
           onToast={onToast}/>
       )}
     </div>

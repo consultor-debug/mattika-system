@@ -18,27 +18,27 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-<script>
-  // Backend API URL — en producción nginx proxia /api/ al backend interno.
-  // En desarrollo local cambia a 'http://localhost:3001'.
-  window.MATTIKA_API = window.location.hostname === 'localhost'
-    ? 'http://localhost:3001'
-    : window.location.origin;
-</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link id="gfont-Montserrat" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&amp;display=swap">
 </head>
 <body>
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#1E4FD4"/><text x="50" y="50" dy=".35em" text-anchor="middle" font-family="Geist, sans-serif" font-weight="700" font-size="46" fill="#fff">M</text></svg></template>
 <div id="root"></div>
 
 <script type="text/babel" src="tweaks-panel.jsx"></script>
 <script type="text/babel" src="auth.jsx"></script>
 <script type="text/babel" src="bundle-core.jsx"></script>
+<script type="text/babel" src="ubigeo.jsx"></script>
 <script type="text/babel" src="data-store.jsx"></script>
 <script type="text/babel" src="contract-template.jsx"></script>
 <script type="text/babel" src="screen-dashboard.jsx"></script>
+<script type="text/babel" src="screen-asesor.jsx"></script>
 <script type="text/babel" src="screen-wizard.jsx"></script>
 <script type="text/babel" src="screen-preview.jsx"></script>
 <script type="text/babel" src="screen-pagos.jsx"></script>
 <script type="text/babel" src="screen-plano.jsx"></script>
+<script type="text/babel" src="screen-reservas.jsx"></script>
 <script type="text/babel" src="plano-satelite.jsx"></script>
 <script type="text/babel" src="screen-extras.jsx"></script>
 <script type="text/babel" src="screen-admin-hub.jsx"></script>
@@ -47,6 +47,12 @@
 <script type="text/babel" src="screen-proyectos.jsx"></script>
 <script type="text/babel" src="screen-lotes-admin.jsx"></script>
 <script type="text/babel" src="screen-lotes-admin-modals.jsx"></script>
+<script type="text/babel" src="ventas-seed.jsx"></script>
+<script type="text/babel" src="comercial-engine.jsx"></script>
+<script type="text/babel" src="comercial-tabs-a.jsx"></script>
+<script type="text/babel" src="comercial-tabs-b.jsx"></script>
+<script type="text/babel" src="comercial-tabs-c.jsx"></script>
+<script type="text/babel" src="screen-comercial.jsx"></script>
 <script type="text/babel">
 
 // app.jsx — Shell, navegación y tweaks
@@ -57,21 +63,32 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 }/*EDITMODE-END*/;
 
 const NAV = [
-// ── Operación diaria (flujo comercial) ──
-{ id: 'dashboard', label: 'Dashboard', icon: 'dashboard', group: 'principal' },
-{ id: 'plano', label: 'Plano', icon: 'mapPin', group: 'principal' },
-{ id: 'inmuebles', label: 'Lotes', icon: 'building', group: 'principal' },
-{ id: 'contracts', label: 'Contratos', icon: 'doc', group: 'principal', badge: 32 },
-{ id: 'clients', label: 'Clientes', icon: 'users', group: 'principal' },
-{ id: 'pagos', label: 'Pagos y cuotas', icon: 'money', group: 'principal' },
+// ── General ──
+{ id: 'dashboard', label: 'Dashboard', icon: 'dashboard', group: 'general' },
+// ── Ventas (operación diaria) ──
+{ id: 'plano', label: 'Plano', icon: 'mapPin', group: 'ventas' },
+{ id: 'inmuebles', label: 'Lotes', icon: 'building', group: 'ventas' },
+{ id: 'reservas', label: 'Reservas', icon: 'clock', group: 'ventas' },
+{ id: 'contracts', label: 'Contratos', icon: 'doc', group: 'ventas' },
+{ id: 'clients', label: 'Clientes', icon: 'users', group: 'ventas' },
+// ── Finanzas ──
+{ id: 'pagos', label: 'Pagos y cuotas', icon: 'money', group: 'finanzas' },
+{ id: 'comercial', label: 'Comercial', icon: 'chart', group: 'finanzas', hideAsesor: true },
 // ── Configuración de la empresa ──
-{ id: 'proyectos', label: 'Proyectos y planos', icon: 'layers', group: 'config' },
+{ id: 'proyectos', label: 'Proyectos y planos', icon: 'layers', group: 'config', perm: 'gestionar_proyectos' },
 { id: 'condiciones', label: 'Condiciones comerciales', icon: 'scale', group: 'config', perm: 'editar_condiciones' },
 { id: 'templates', label: 'Plantillas', icon: 'template', group: 'config', perm: 'editar_plantillas' },
-{ id: 'correo', label: 'Correo', icon: 'mail', group: 'config' },
-{ id: 'asesores', label: 'Usuarios y equipo', icon: 'user', group: 'config' },
+{ id: 'correo', label: 'Correo', icon: 'mail', group: 'config', perm: 'gestionar_usuarios' },
+{ id: 'asesores', label: 'Usuarios y equipo', icon: 'user', group: 'config', perm: 'gestionar_usuarios' },
 { id: 'admin', label: 'Superusuario', icon: 'shield', group: 'config', perm: 'superusuario' },
 { id: 'settings', label: 'Ajustes', icon: 'settings', group: 'config' }];
+
+// Secciones agrupadas del menú lateral (colapsables).
+const NAV_SECTIONS = [
+{ id: 'general',  label: 'General',       defaultOpen: true },
+{ id: 'ventas',   label: 'Ventas',        defaultOpen: true },
+{ id: 'finanzas', label: 'Finanzas',      defaultOpen: true },
+{ id: 'config',   label: 'Configuración', defaultOpen: false }];
 
 
 // ── User card en sidebar — muestra usuario actual + cierre de sesión
@@ -141,6 +158,16 @@ const App = () => {
     try { localStorage.setItem('mattika.sidebar.collapsed', next ? '1' : '0'); } catch (e) {}
     return next;
   });
+  // Estado de secciones colapsables del menú (persistido).
+  const [openSections, setOpenSections] = React.useState(() => {
+    try { const s = JSON.parse(localStorage.getItem('mattika.nav.sections') || 'null'); if (s) return s; } catch (e) {}
+    return Object.fromEntries(NAV_SECTIONS.map((s) => [s.id, s.defaultOpen]));
+  });
+  const toggleSection = (id) => setOpenSections((prev) => {
+    const next = { ...prev, [id]: !prev[id] };
+    try { localStorage.setItem('mattika.nav.sections', JSON.stringify(next)); } catch (e) {}
+    return next;
+  });
   const [toast, toastNode] = useToasts();
 
   // Forzar re-render cuando cambia el contexto (proyecto/etapa).
@@ -149,11 +176,18 @@ const App = () => {
   const [, forceCtx] = React.useReducer((x) => x + 1, 0);
   React.useEffect(() => {
     const handler = () => forceCtx();
+    // Cuando cambian permisos/usuarios, además releemos la sesión activa desde
+    // disco: si se editó al usuario logueado, su nombre/rol se actualizan en
+    // vivo en el saludo y la barra lateral.
+    const sesionHandler = () => {
+      try { const s = window.loadSesion?.(); if (s) setSesion(s); } catch (e) {}
+      forceCtx();
+    };
     window.addEventListener('mattika:contexto-cambiado', handler);
-    window.addEventListener('mattika:permisos-cambiado', handler);
+    window.addEventListener('mattika:permisos-cambiado', sesionHandler);
     return () => {
       window.removeEventListener('mattika:contexto-cambiado', handler);
-      window.removeEventListener('mattika:permisos-cambiado', handler);
+      window.removeEventListener('mattika:permisos-cambiado', sesionHandler);
     };
   }, []);
 
@@ -192,43 +226,64 @@ const App = () => {
     if (initialOrTipo && typeof initialOrTipo === 'object') {
       setWizardInitial(initialOrTipo);
     } else {
-      // Intentar restaurar borrador guardado
-      try {
-        const empresaId = window.getSesion?.()?.empresaId || 'default';
-        const raw = localStorage.getItem(`wizard_borrador_${empresaId}`);
-        if (raw) {
-          const b = JSON.parse(raw);
-          // Solo restaurar si tiene menos de 7 días
-          if (Date.now() - b.ts < 7 * 86400000) {
-            setWizardInitial(b);
-          } else {
-            localStorage.removeItem(`wizard_borrador_${empresaId}`);
-            setWizardInitial(null);
-          }
-        } else {
-          setWizardInitial(null);
-        }
-      } catch { setWizardInitial(null); }
+      setWizardInitial(null);
     }
     setWizardOpen(true);
     setPreview(null);
   };
 
+  const convertirReserva = (r) => {
+    const lote = window.loteFromScope?.(r.scope, r.loteId) || {};
+    const proyecto = window.proyectoNombreFromScope?.(r.scope) || (window.getProyectoActual?.()?.nombre) || '';
+    const initial = {
+      compradorA: { dni: r.dni || '', nombres: r.nombres || '', apellidos: r.apellidos || '', telefono: r.telefono || '', email: r.email || '' },
+      inmueble: {
+        proyecto,
+        tipoInmueble: 'Lote',
+        unidad: String(lote.numero != null ? lote.numero : (String(r.loteId).split('-')[1] || '')),
+        manzana: lote.manzana || (String(r.loteId).split('-')[0] || ''),
+        area: String(lote.m2 != null ? lote.m2 : ''),
+        loteId: r.loteId, scope: r.scope,
+      },
+      terminos: { precio: r.precioLista || lote.precio || 0 },
+      meta: { asesorId: r.asesorId || '' },
+    };
+    startNew(initial);
+    toast(`Convirtiendo reserva del lote ${r.loteId} en venta…`);
+  };
+
   const handleGenerate = (data) => {
-    setPreview(data);
+    // Persiste la venta (código correlativo) y registra a ambos compradores
+    // como clientes. Devuelve el registro con su code/id para la vista previa.
+    let saved = data;
+    try {
+      const empId = window.getSesion?.()?.empresaId;
+      saved = window.registrarVenta?.(empId, data) || data;
+    } catch (e) { console.error('registrarVenta', e); }
+    setPreview(saved);
     setWizardOpen(false);
-    toast('Documento generado correctamente');
-    // Save contract to API
-    if (window.apiClient) {
-      window.apiClient('/api/contratos', {
-        method: 'POST',
-        body: JSON.stringify({ datos: data }),
-      }).catch(() => {});
-    }
+    toast(data.id ? 'Venta actualizada correctamente' : 'Venta generada y guardada');
+  };
+
+  // Reabre el asistente con TODOS los datos de la venta ya cargados,
+  // para corregir un dato o agregar/quitar un comprador.
+  const handleEditPreview = (data) => {
+    setWizardInitial(data);
+    setWizardOpen(true);
+    setPreview(null);
   };
 
   const openContract = (c) => {
-    // Construir documento a partir de la fila de contrato
+    // Si es una venta persistida, reabrimos sus datos completos tal cual.
+    if (c && c._venta) {
+      const v = c._venta;
+      const data = { ...v };
+      if (!data.cronograma) data.cronograma = generarCronograma(data.terminos);
+      setPreview(data);
+      setWizardOpen(false);
+      return;
+    }
+    // Construir documento a partir de la fila de contrato (demo)
     const parts = c.cliente.split(' ');
     const nombres = parts.slice(0, parts.length >= 4 ? 2 : 1).join(' ');
     const apellidos = parts.slice(parts.length >= 4 ? 2 : 1).join(' ');
@@ -274,7 +329,8 @@ const App = () => {
         penalidadDiaria: 30,
         porcLucroCesante: 30
       },
-      meta: { asesorId: 'me', plantilla: 'tpl-1', fechaContrato: c.fecha, lugarFirma: 'Trujillo', notas: '' }
+      meta: { asesorId: 'me', plantilla: 'tpl-1', fechaContrato: c.fecha, lugarFirma: 'Trujillo', notas: '' },
+      code: c.code, status: c.status,
     };
     dummy.cronograma = generarCronograma(dummy.terminos);
     setPreview(dummy);
@@ -345,33 +401,42 @@ const App = () => {
         <div className="brand">
           <div className="brand-mark" style={{ background: `linear-gradient(140deg, ${empresaColor} 0%, var(--brand-ink) 100%)` }}>M</div>
           <div>
-            <div className="brand-name" style={{ fontFamily: "\"Open Sans\"" }}>Mattika</div>
+            <div className="brand-name">Mattika</div>
             <div className="brand-sub" title={`${empresaActual?.nombre} · ${proyectoActual}`}>{proyectoActual}</div>
           </div>
         </div>
 
-        <div className="nav-group-label">Principal</div>
-        {NAV.filter((n) => n.group === 'principal' && (!n.perm || can(n.perm))).map((n) =>
-        <button key={n.id}
-          data-label={n.label}
-          className={`nav-item ${route === n.id && !wizardOpen && !preview ? 'active' : ''}`}
-          onClick={() => goto(n.id)}>
-            <Icon name={n.icon} size={16} />
-            <span>{n.label}</span>
-            {n.badge && <span className="badge">{n.badge}</span>}
-          </button>
-        )}
-
-        <div className="nav-group-label">Configuración</div>
-        {NAV.filter((n) => n.group === 'config' && (!n.perm || can(n.perm))).map((n) =>
-        <button key={n.id}
-          data-label={n.label}
-          className={`nav-item ${route === n.id && !wizardOpen && !preview ? 'active' : ''}`}
-          onClick={() => goto(n.id)}>
-            <Icon name={n.icon} size={16} />
-            <span>{n.label}</span>
-          </button>
-        )}
+        <nav className="nav-sections">
+        {NAV_SECTIONS.map((sec) => {
+          const items = NAV.filter((n) => n.group === sec.id && (!n.perm || can(n.perm)) && !(n.hideAsesor && window.esAsesorRestringido?.()));
+          if (!items.length) return null;
+          const hasActive = items.some((n) => n.id === route && !wizardOpen && !preview);
+          // En modo icono siempre abierto; expandido: abierto si el usuario lo dejó
+          // abierto o si la ruta activa vive dentro de esta sección.
+          const open = sidebarCollapsed ? true : ((openSections[sec.id] ?? sec.defaultOpen) || hasActive);
+          return (
+            <div className={`nav-section ${open ? 'open' : ''}`} key={sec.id}>
+              <button className="nav-group-label" onClick={() => toggleSection(sec.id)} aria-expanded={open}>
+                <span>{sec.label}</span>
+                <Icon name="chevronD" size={12} className="nav-group-caret" />
+              </button>
+              {open &&
+              <div className="nav-section-items">
+                {items.map((n) =>
+                <button key={n.id}
+                  data-label={n.label}
+                  className={`nav-item ${route === n.id && !wizardOpen && !preview ? 'active' : ''}`}
+                  onClick={() => goto(n.id)}>
+                    <Icon name={n.icon} size={16} />
+                    <span>{n.label}</span>
+                    {(() => { const b = n.id === 'contracts' ? ((window.getContratosRows?.() || []).length || null) : n.badge; return b ? <span className="badge">{b}</span> : null; })()}
+                  </button>
+                )}
+              </div>}
+            </div>
+          );
+        })}
+        </nav>
 
         <div className="sidebar-footer">
           <UserCard sesion={sesion} empresa={empresaActual} onLogout={logout} />
@@ -417,23 +482,27 @@ const App = () => {
         </header>
 
         <main>
-          {curScreen === 'dashboard' && <ScreenDashboard onNew={startNew} onOpenContract={openContract} onGoto={goto} onToast={toast} />}
-          {curScreen === 'contracts' && <ScreenContracts onOpenContract={openContract} onNew={startNew} initialFilterStatus={routeParams.status} onToast={toast} />}
+          {curScreen === 'dashboard' && (window.esAsesorRestringido?.()
+            ? <ScreenAsesorHome onNew={startNew} onOpenContract={openContract} onGoto={goto} />
+            : <ScreenDashboard onNew={startNew} onOpenContract={openContract} onGoto={goto} />)}
+          {curScreen === 'contracts' && <ScreenContracts onOpenContract={openContract} onNew={startNew} initialFilterStatus={routeParams.status} />}
           {curScreen === 'clients' && <ScreenClients onToast={toast} />}
           {curScreen === 'plano' && <ScreenPlano key={scopeKey} onNew={startNew} onToast={toast} />}
+          {curScreen === 'reservas' && <ScreenReservas onToast={toast} onConvertir={convertirReserva} />}
           {curScreen === 'inmuebles' && <ScreenLotesAdmin key={scopeKey} onToast={toast} onGoto={goto} />}
           {curScreen === 'admin' && <ScreenAdminHub onGoto={goto} onToast={toast} />}
           {curScreen === 'condiciones' && <ScreenCondiciones onGoto={goto} onToast={toast} />}
           {curScreen === 'correo' && <ScreenCorreo onGoto={goto} onToast={toast} />}
           {curScreen === 'proyectos' && <ScreenProyectos onGoto={goto} onToast={toast} />}
           {curScreen === 'pagos' && <ScreenPagos initialFilter={routeParams.filter} onToast={toast} />}
+          {curScreen === 'comercial' && <ScreenComercial />}
           {curScreen === 'templates' && <ScreenTemplateEditor onToast={toast} isAdmin={true} />}
           {curScreen === 'asesores' && <ScreenAsesores onToast={toast} />}
           {curScreen === 'settings' && <ScreenSettings onToast={toast} t={t} setTweak={setTweak} />}
           {curScreen === 'wizard' && <ScreenWizard initialData={wizardInitial}
           onCancel={() => {setWizardOpen(false);}}
-          onGenerate={handleGenerate} onToast={toast} />}
-          {curScreen === 'preview' && <ScreenPreview data={preview} onBack={() => setPreview(null)} onToast={toast} />}
+          onGenerate={handleGenerate} />}
+          {curScreen === 'preview' && <ScreenPreview data={preview} onBack={() => setPreview(null)} onEdit={handleEditPreview} onToast={toast} />}
         </main>
       </div>
 

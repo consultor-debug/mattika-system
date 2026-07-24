@@ -1,44 +1,53 @@
 // screen-dashboard.jsx — Vista principal con métricas y atajos
 
-const ScreenDashboard = ({ onNew, onOpenContract, onGoto, onToast }) => {
-  const sesion = window.getSesion?.() || {};
-  const nombre = sesion.nombre || 'Usuario';
-  const hora = new Date().getHours();
-  const saludo = hora < 12 ? 'Buenos días' : hora < 19 ? 'Buenas tardes' : 'Buenas noches';
-
-  const [metrics, setMetrics] = React.useState(null);
-  const [contratos, setContratos] = React.useState([]);
+const ScreenDashboard = ({ onNew, onOpenContract, onGoto }) => {
+  // Todas las cifras derivan de las VENTAS reales importadas.
+  const _rows = (window.getContratosRows && window.getContratosRows()) || [];
+  const _cuotas = (window.deriveCuotasFromReservas && window.deriveCuotasFromReservas()) || [];
+  const nombreSesion = ((window.getSesion?.()?.nombre || '').split(' ')[0]) || 'equipo';
+  const mContratos = _rows.length;
+  const mPorFirmar = _rows.filter(c => c.status === 'por-firmar').length;
+  const mMonto = _rows.reduce((s, c) => s + (+c.precio || 0), 0);
+  const _vencidas = _cuotas.filter(c => c.estado === 'vencida');
+  const mVencidas = _vencidas.length;
+  const mVencidoMonto = _vencidas.reduce((s, c) => s + (+c.monto || 0), 0);
+  // Recaudo total (iniciales de todas las ventas)
+  const mRecaudo = _rows.reduce((s, c) => s + (+(c._venta?.terminos?.inicial) || 0), 0);
+  // Próximas cuotas reales (pendientes, más cercanas a vencer).
+  const _hoy = Date.now();
+  const _proximas = _cuotas
+    .filter(c => c.estado === 'pendiente')
+    .sort((a, b) => new Date(a.vence) - new Date(b.vence))
+    .slice(0, 4)
+    .map(c => ({ nom: c.cliente, code: c.code, monto: c.monto,
+      dias: Math.max(0, Math.round((new Date(c.vence) - _hoy) / 86400000)) }));
+  // Ranking real de ejecutivos por monto contratado.
+  const _byAsesor = {};
+  _rows.forEach(r => {
+    const n = r.asesor || 'Equipo comercial';
+    if (!_byAsesor[n]) _byAsesor[n] = { n, m: 0, v: 0 };
+    _byAsesor[n].m += 1; _byAsesor[n].v += (+r.precio || 0);
+  });
+  const _asesores = Object.values(_byAsesor).sort((a, b) => b.v - a.v).slice(0, 5);
+  const _asesorMax = Math.max(1, ..._asesores.map(a => a.v));
+  // Formato compacto en miles (S/ 514K) para no desbordar las tarjetas.
+  const fmtIntK = (n) => n >= 1000 ? Math.round(n/1000) + 'K' : String(Math.round(n||0));
+  const docTypes = (window.docTypesForPack?.(window.loadTemplate?.()) || window.DOC_TYPES || []);
   const sparkA = [12,15,11,18,22,17,24,28,26,32,30,34];
   const sparkB = [8,10,9,11,12,11,14,13,15,14,16,18];
   const sparkC = [4,3,5,4,2,3,2,1,3,2,1,2];
   const sparkD = [22,28,24,30,34,32,36,38,42,40,44,48];
 
-  React.useEffect(() => {
-    if (!window.apiClient) return;
-    window.apiClient('/api/dashboard').then(d => { if (d) setMetrics(d); }).catch(() => {});
-    window.apiClient('/api/contratos?limit=6').then(d => { if (d) setContratos(d.slice ? d.slice(0,6) : []); }).catch(() => {});
-  }, []);
-
-  const m = metrics || {};
-  const esteMes   = parseInt(m.contratos?.este_mes)  || 0;
-  const porFirmar = parseInt(m.contratos?.por_firmar) || 0;
-  const montoTotal= parseFloat(m.contratos?.monto_total) || 0;
-  const vencidas  = parseInt(m.cuotas?.vencidas)      || 0;
-
   return (
     <div className="page" data-screen-label="Dashboard">
       <div className="page-head">
         <div>
-          <h1 className="page-title">{saludo}, {nombre.split(' ')[0]}</h1>
-          <div className="page-sub">
-            {porFirmar > 0 && <><b style={{color:'var(--ink)', cursor:'pointer'}} onClick={() => onGoto('contracts', {status:'por-firmar'})}>{porFirmar} contrato{porFirmar !== 1 ? 's' : ''} por firmar</b>{vencidas > 0 ? ' y ' : '.'}</>}
-            {vencidas > 0 && <><b style={{color:'var(--warning)', cursor:'pointer'}} onClick={() => onGoto('pagos', {filter:'vencida'})}>{vencidas} cuota{vencidas !== 1 ? 's' : ''} vencida{vencidas !== 1 ? 's' : ''}</b>.</>}
-            {porFirmar === 0 && vencidas === 0 && <span>Todo al día — sin pendientes urgentes.</span>}
-          </div>
+          <h1 className="page-title">Buenas tardes, {nombreSesion}</h1>
+          <div className="page-sub">Tienes <b style={{color:'var(--ink)', cursor:'pointer'}} onClick={() => onGoto('contracts', {status:'por-firmar'})}>{mPorFirmar} contratos por firmar</b> y <b style={{color:'var(--warning)', cursor:'pointer'}} onClick={() => onGoto('pagos', {filter:'vencida'})}>{mVencidas} cuotas vencidas</b>.</div>
         </div>
         <div className="hstack gap-8">
-          <button className="btn" onClick={() => onToast?.('Filtro por período · Próximamente')}>
-            <Icon name="filter" size={14}/> {new Date().toLocaleDateString('es-PE', {month:'long', year:'numeric'})}
+          <button className="btn" onClick={() => onGoto('comercial')}>
+            <Icon name="chart" size={14}/> Análisis comercial
           </button>
           <button className="btn primary" onClick={onNew}>
             <Icon name="plus" size={15}/> Nuevo documento
@@ -52,8 +61,8 @@ const ScreenDashboard = ({ onNew, onOpenContract, onGoto, onToast }) => {
           <div className="metric-label">
             <Icon name="doc" size={13}/> Contratos del mes
           </div>
-          <div className="metric-value">{metrics ? esteMes : '—'}</div>
-          <div className="metric-delta"><Icon name="trendUp" size={12}/> {metrics ? `Total: ${m.contratos?.total || 0}` : 'Cargando…'}</div>
+          <div className="metric-value">{mContratos}</div>
+          <div className="metric-delta"><Icon name="trendUp" size={12}/> Histórico total</div>
           <div className="metric-spark"><Sparkline data={sparkA} color="var(--brand)"/></div>
         </div>
         <div className="metric" onClick={() => onGoto('contracts', {status:'por-firmar'})} style={{cursor:'pointer'}}>
@@ -61,16 +70,16 @@ const ScreenDashboard = ({ onNew, onOpenContract, onGoto, onToast }) => {
             <Icon name="clock" size={13}/> Por firmar
             <span className="metric-link">Ver lista <Icon name="arrowR" size={10}/></span>
           </div>
-          <div className="metric-value">{metrics ? porFirmar : '—'}</div>
-          <div className="metric-delta neg"><Icon name="trendUp" size={12}/> Pendientes de firma</div>
+          <div className="metric-value">{mPorFirmar}</div>
+          <div className="metric-delta neg"><Icon name="clock" size={12}/> Pendientes de firma</div>
           <div className="metric-spark"><Sparkline data={sparkB} color="var(--warning)"/></div>
         </div>
         <div className="metric" onClick={() => onGoto('pagos')} style={{cursor:'pointer'}}>
           <div className="metric-label">
             <Icon name="money" size={13}/> Monto contratado
           </div>
-          <div className="metric-value"><span className="cur">S/</span>{metrics ? fmtSoles(montoTotal) : '—'}</div>
-          <div className="metric-delta"><Icon name="trendUp" size={12}/> Total activo</div>
+          <div className="metric-value"><span className="cur">S/</span>{fmtIntK(mMonto)}</div>
+          <div className="metric-delta"><Icon name="trendUp" size={12}/> Recaudo S/ {fmtIntK(mRecaudo)}</div>
           <div className="metric-spark"><Sparkline data={sparkD} color="var(--success)"/></div>
         </div>
         <div className="metric" onClick={() => onGoto('pagos', {filter:'vencida'})} style={{cursor:'pointer'}}>
@@ -78,8 +87,8 @@ const ScreenDashboard = ({ onNew, onOpenContract, onGoto, onToast }) => {
             <Icon name="alert" size={13}/> Cuotas vencidas
             <span className="metric-link">Registrar pago <Icon name="arrowR" size={10}/></span>
           </div>
-          <div className="metric-value">{metrics ? vencidas : '—'}</div>
-          <div className="metric-delta neg"><Icon name="trendDown" size={12}/> {metrics ? `${m.cuotas?.proximas || 0} próximas a vencer` : 'Cargando…'}</div>
+          <div className="metric-value">{mVencidas}</div>
+          <div className="metric-delta neg"><Icon name="trendDown" size={12}/> S/ {fmtIntK(mVencidoMonto)} vencido</div>
           <div className="metric-spark"><Sparkline data={sparkC} color="var(--danger)"/></div>
         </div>
       </div>
@@ -89,9 +98,9 @@ const ScreenDashboard = ({ onNew, onOpenContract, onGoto, onToast }) => {
         <div className="cta-ic"><Icon name="layers" size={26}/></div>
         <div className="flex1">
           <div className="cta-title">Generar nueva venta</div>
-          <div className="cta-desc">Una sola venta genera automáticamente los <b>6 documentos</b>: Separación, Contrato de Compraventa, Cronograma de Pagos, Acta de Separación, Tratamiento de Datos y Declaración Jurada.</div>
+          <div className="cta-desc">Una sola venta genera automáticamente los <b>{docTypes.length} documentos</b> del modelo de tu empresa, listos para firma.</div>
           <div className="cta-docs">
-            {DOC_TYPES.map((d, i) => (
+            {docTypes.map((d, i) => (
               <span key={d.id} className="cta-doc">
                 <span className="cta-doc-n">{String(i+1).padStart(2,'0')}</span>
                 {d.label}
@@ -99,7 +108,7 @@ const ScreenDashboard = ({ onNew, onOpenContract, onGoto, onToast }) => {
             ))}
           </div>
         </div>
-        <button className="btn primary lg">
+        <button className="btn primary lg" onClick={onNew}>
           <Icon name="plus" size={15}/> Iniciar venta
         </button>
       </div>
@@ -128,32 +137,19 @@ const ScreenDashboard = ({ onNew, onOpenContract, onGoto, onToast }) => {
               </tr>
             </thead>
             <tbody>
-              {(contratos.length ? contratos : CONTRATOS_RECIENTES).slice(0,6).map((c) => {
-                const datos = c.datos || {};
-                const row = contratos.length ? {
-                  id: c.id,
-                  code: c.codigo,
-                  cliente: `${datos.nombres || ''} ${datos.apellidos || ''}`.trim() || c.codigo,
-                  proyecto: datos.proyecto || '',
-                  unidad: datos.loteId || '',
-                  tipo: c.tipo || 'venta',
-                  precio: parseFloat(datos.precio) || 0,
-                  status: c.estado,
-                } : c;
-                return (
-                  <tr key={row.id} onClick={() => onOpenContract(row)}>
-                    <td className="num">{row.code}</td>
-                    <td>
-                      <div className="strong" style={{fontSize:13.5}}>{row.cliente}</div>
-                      <div className="muted text-xs">{row.proyecto} · {row.unidad}</div>
-                    </td>
-                    <td><DocTypeBadge type={row.tipo}/></td>
-                    <td className="num right strong">{fmtSoles(row.precio)}</td>
-                    <td><StatusPill status={row.status}/></td>
-                    <td><Icon name="chevronR" size={14} style={{color:'var(--muted-2)'}}/></td>
-                  </tr>
-                );
-              })}
+              {((window.getContratosRows && window.getContratosRows()) || CONTRATOS_RECIENTES).slice(0,6).map((c) => (
+                <tr key={c.id} onClick={() => onOpenContract(c)}>
+                  <td className="num">{c.code}</td>
+                  <td>
+                    <div className="strong" style={{fontSize:13.5}}>{c.cliente}</div>
+                    <div className="muted text-xs">{c.proyecto} · {c.unidad}</div>
+                  </td>
+                  <td><DocTypeBadge type={c.tipo}/></td>
+                  <td className="num right strong">{fmtSoles(c.precio)}</td>
+                  <td><StatusPill status={c.status}/></td>
+                  <td><Icon name="chevronR" size={14} style={{color:'var(--muted-2)'}}/></td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -165,18 +161,16 @@ const ScreenDashboard = ({ onNew, onOpenContract, onGoto, onToast }) => {
               <div className="card-title">Próximas cuotas</div>
             </div>
             <div style={{padding: '4px 0'}}>
-              {[
-                {nom: 'R. Ramos Velarde', code: 'MTK-2026-0182', monto: 12166, dias: 2, urg: true},
-                {nom: 'A. Jiménez Soto',  code: 'MTK-2026-0181', monto: 8250,  dias: 5},
-                {nom: 'R. Tapia Ferrer',  code: 'MTK-2026-0179', monto: 5280,  dias: 6},
-                {nom: 'C. Mendieta',      code: 'MTK-2026-0184', monto: 5522,  dias: 8},
-              ].map((c, i) => (
+              {_proximas.length === 0 && (
+                <div className="muted text-sm" style={{padding:'16px 20px'}}>Sin cuotas próximas.</div>
+              )}
+              {_proximas.map((c, i) => (
                 <div key={i} style={{
                   display:'flex', alignItems:'center', gap: 10,
                   padding:'10px 20px',
-                  borderBottom: i<3 ? '1px solid var(--hairline)' : 'none',
+                  borderBottom: i < _proximas.length-1 ? '1px solid var(--hairline)' : 'none',
                 }}>
-                  <div className="avatar sm">{c.nom.split(' ').slice(-1)[0][0]}</div>
+                  <div className="avatar sm">{(c.nom || '?').split(' ').slice(-1)[0][0]}</div>
                   <div className="flex1">
                     <div style={{fontSize:13, fontWeight:500, color:'var(--ink)'}}>{c.nom}</div>
                     <div className="muted text-xs mono">{c.code} · en {c.dias} días</div>
@@ -189,21 +183,20 @@ const ScreenDashboard = ({ onNew, onOpenContract, onGoto, onToast }) => {
 
           <div className="card">
             <div className="card-head">
-              <div className="card-title">Asesores · mayo</div>
+              <div className="card-title">Ejecutivos · ranking</div>
+              <button className="btn sm ghost" onClick={() => onGoto('comercial')}>
+                Análisis <Icon name="arrowR" size={12}/>
+              </button>
             </div>
             <div style={{padding:'4px 0'}}>
-              {[
-                {n:'Camila Reátegui', ini:'CR', m:12, v:780000},
-                {n:'Diego Saldaña',   ini:'DS', m:9,  v:410000},
-                {n:'Lorena Quispe',   ini:'LQ', m:6,  v:365000},
-                {n:'Andrés Castañeda',ini:'AC', m:5,  v:282500},
-              ].map((a, i) => {
-                const pct = Math.round((a.v / 800000) * 100);
+              {_asesores.map((a, i) => {
+                const pct = Math.round((a.v / _asesorMax) * 100);
+                const ini = (a.n || '?').split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase();
                 return (
-                  <div key={i} style={{padding:'10px 20px', borderBottom: i<3 ? '1px solid var(--hairline)' : 'none'}}>
+                  <div key={i} style={{padding:'10px 20px', borderBottom: i < _asesores.length-1 ? '1px solid var(--hairline)' : 'none'}}>
                     <div className="hstack between">
                       <div className="hstack gap-8">
-                        <div className="avatar sm">{a.ini}</div>
+                        <div className="avatar sm">{ini}</div>
                         <div style={{fontSize:13, fontWeight:500}}>{a.n}</div>
                       </div>
                       <div className="num strong" style={{fontSize:12.5}}>S/ {fmtInt(a.v)}</div>
@@ -216,7 +209,7 @@ const ScreenDashboard = ({ onNew, onOpenContract, onGoto, onToast }) => {
                     </div>
                     <div className="hstack between mt-4">
                       <span className="muted text-xs">{a.m} contratos</span>
-                      <span className="muted text-xs mono">{pct}% meta</span>
+                      <span className="muted text-xs mono">{pct}%</span>
                     </div>
                   </div>
                 );

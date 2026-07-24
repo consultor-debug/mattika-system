@@ -19,8 +19,8 @@ const ScreenClients = ({ onToast }) => {
   const [clients, setClients] = React.useState(() => window.deriveClientes?.(empresaId) || []);
   const [q, setQ] = React.useState('');
   const [nuevoOpen, setNuevoOpen] = React.useState(false);
+  const [editCli, setEditCli] = React.useState(null);
   const [detalleId, setDetalleId] = React.useState(null);
-  const [editCliente, setEditCliente] = React.useState(null);
 
   const refresh = () => setClients(window.deriveClientes?.(empresaId) || []);
   React.useEffect(() => {
@@ -44,22 +44,14 @@ const ScreenClients = ({ onToast }) => {
     onToast?.(`✓ Cliente ${data.nombres} ${data.apellidos} registrado`);
   };
 
-  const updateCliente = (data) => {
+  const editCliente = (data) => {
     const store = window.loadClientesStore?.(empresaId) || [];
-    const next = store.map(c => c.id === data.id ? { ...c, ...data } : c);
-    window.saveClientesStore?.(empresaId, next);
+    const idx = store.findIndex(c => String(c.dni) === String(data.dni));
+    if (idx >= 0) store[idx] = { ...store[idx], ...data };
+    else store.unshift({ ...data, id: 'c-' + Date.now(), contratos: 0, ult: new Date().toISOString().slice(0,10) });
+    window.saveClientesStore?.(empresaId, store);
     refresh();
-    onToast?.(`✓ Cliente actualizado`);
-  };
-
-  const exportCSV = () => {
-    const rows = [['Nombres','Apellidos','DNI','Estado Civil','Teléfono','Correo','Domicilio','Contratos']];
-    clients.forEach(c => rows.push([c.nombres, c.apellidos, c.dni, c.estadoCivil||'', c.telefono||'', c.email||'', c.domicilio||'', c.contratos||0]));
-    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-    const a = document.createElement('a');
-    a.href = 'data:text/csv;charset=utf-8,﻿' + encodeURIComponent(csv);
-    a.download = `clientes_${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
+    onToast?.('✓ Cliente actualizado');
   };
 
   const detalle = clients.find(c => c.id === detalleId);
@@ -76,7 +68,11 @@ const ScreenClients = ({ onToast }) => {
           </div>
         </div>
         <div className="hstack gap-8">
-          <button className="btn" onClick={exportCSV}><Icon name="download" size={14}/> Exportar</button>
+          <button className="btn" onClick={() => window.descargarCSV?.(
+            `clientes-${new Date().toISOString().slice(0,10)}`,
+            ['Nombres','Apellidos','DNI','Teléfono','Correo','Estado civil','Domicilio','Ventas','Última actividad'],
+            filtered.map(c => [c.nombres, c.apellidos, c.dni, c.telefono, c.email, c.estadoCivil, c.domicilio, c.contratos, c.ult])
+          )}><Icon name="download" size={14}/> Exportar</button>
           <button className="btn primary" onClick={() => setNuevoOpen(true)}>
             <Icon name="plus" size={15}/> Nuevo cliente
           </button>
@@ -133,17 +129,20 @@ const ScreenClients = ({ onToast }) => {
       </div>
 
       {nuevoOpen && <ClienteNuevoModal onClose={() => setNuevoOpen(false)} onSave={addCliente}/>}
-      {editCliente && <ClienteNuevoModal initial={editCliente} onClose={() => setEditCliente(null)} onSave={(d) => updateCliente({ ...d, id: editCliente.id })}/>}
-      {detalle && <ClienteDetailDrawer cliente={detalle} onClose={() => setDetalleId(null)} onEdit={() => { setEditCliente(detalle); setDetalleId(null); }}/>}
+      {editCli && <ClienteNuevoModal initial={editCli} onClose={() => setEditCli(null)} onSave={editCliente}/>}
+      {detalle && <ClienteDetailDrawer cliente={detalle} onClose={() => setDetalleId(null)} onEdit={() => { setEditCli(detalle); setDetalleId(null); }}/>}
     </div>
   );
 };
 
-const ClienteNuevoModal = ({ onClose, onSave, initial }) => {
-  const [f, setF] = React.useState(initial || { nombres:'', apellidos:'', dni:'', estadoCivil:'Soltero', telefono:'', email:'', domicilio:'' });
+const ClienteNuevoModal = ({ initial, onClose, onSave }) => {
+  const esEdit = !!initial;
+  const [f, setF] = React.useState(initial
+    ? { nombres:'', apellidos:'', dni:'', estadoCivil:'Soltero', telefono:'', email:'', domicilio:'', ...initial }
+    : { nombres:'', apellidos:'', dni:'', estadoCivil:'Soltero', telefono:'', email:'', domicilio:'' });
   const set = (k, v) => setF({ ...f, [k]: v });
   const submit = () => {
-    if (!f.nombres.trim() || !f.apellidos.trim() || f.dni.length !== 8) {
+    if (!f.nombres.trim() || !f.apellidos.trim() || String(f.dni).length !== 8) {
       alert('Completa nombres, apellidos y un DNI válido de 8 dígitos.');
       return;
     }
@@ -154,14 +153,14 @@ const ClienteNuevoModal = ({ onClose, onSave, initial }) => {
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" style={{width:'min(620px, calc(100vw - 32px))'}} onClick={(e)=>e.stopPropagation()}>
         <div className="card-head">
-          <div className="card-title hstack gap-8"><Icon name="users" size={16}/> {initial ? 'Editar cliente' : 'Nuevo cliente'}</div>
+          <div className="card-title hstack gap-8"><Icon name={esEdit ? 'edit' : 'users'} size={16}/> {esEdit ? 'Editar cliente' : 'Nuevo cliente'}</div>
           <button className="icon-btn" onClick={onClose}><Icon name="x" size={14}/></button>
         </div>
         <div className="card-pad">
           <div className="field-group cols-2">
             <div className="field"><label className="field-label">Nombres <span className="req">*</span></label><input className="input" value={f.nombres} onChange={(e)=>set('nombres', e.target.value)}/></div>
             <div className="field"><label className="field-label">Apellidos <span className="req">*</span></label><input className="input" value={f.apellidos} onChange={(e)=>set('apellidos', e.target.value)}/></div>
-            <div className="field"><label className="field-label">DNI <span className="req">*</span></label><input className="input mono" maxLength="8" value={f.dni} onChange={(e)=>set('dni', e.target.value.replace(/\D/g,'').slice(0,8))}/></div>
+            <div className="field"><label className="field-label">DNI <span className="req">*</span></label><input className="input mono" maxLength="8" value={f.dni} disabled={esEdit} style={esEdit?{opacity:.65}:null} onChange={(e)=>set('dni', e.target.value.replace(/\D/g,'').slice(0,8))}/></div>
             <div className="field"><label className="field-label">Estado civil</label><select className="select" value={f.estadoCivil} onChange={(e)=>set('estadoCivil', e.target.value)}><option>Soltero</option><option>Soltera</option><option>Casado</option><option>Casada</option><option>Conviviente</option><option>Divorciado(a)</option><option>Viudo(a)</option></select></div>
             <div className="field"><label className="field-label">Teléfono</label><div className="input-prefix"><span className="px">+51</span><input value={f.telefono} onChange={(e)=>set('telefono', e.target.value)}/></div></div>
             <div className="field"><label className="field-label">Correo</label><input className="input" type="email" value={f.email} onChange={(e)=>set('email', e.target.value)}/></div>
@@ -170,7 +169,7 @@ const ClienteNuevoModal = ({ onClose, onSave, initial }) => {
         </div>
         <div style={{padding:14, borderTop:'1px solid var(--border)', display:'flex', justifyContent:'flex-end', gap:8}}>
           <button className="btn" onClick={onClose}>Cancelar</button>
-          <button className="btn primary" onClick={submit}><Icon name="check" size={13}/> Guardar cliente</button>
+          <button className="btn primary" onClick={submit}><Icon name="check" size={13}/> {esEdit ? 'Guardar cambios' : 'Guardar cliente'}</button>
         </div>
       </div>
     </div>
@@ -204,7 +203,7 @@ const ClienteDetailDrawer = ({ cliente, onClose, onEdit }) => (
         <div className="card">
           <div className="card-head">
             <div className="card-title">Lotes y operaciones</div>
-            <span className="pill brand">{(cliente.operaciones || []).length}</span>
+            <span className="pill accent">{(cliente.operaciones || []).length}</span>
           </div>
           <div style={{padding:'8px 16px 16px'}}>
             {(cliente.operaciones || []).length === 0 ? (
@@ -257,7 +256,6 @@ const ScreenInmuebles = () => {
   const [items, setItems] = React.useState(INMUEBLES_INICIAL);
   const [nuevoOpen, setNuevoOpen] = React.useState(false);
   const [detalleId, setDetalleId] = React.useState(null);
-  const [editInmueble, setEditInmueble] = React.useState(null);
   const [filtroSt, setFiltroSt] = React.useState('all');
 
   const filtered = items.filter(i => filtroSt === 'all' || i.st === filtroSt);
@@ -333,22 +331,19 @@ const ScreenInmuebles = () => {
       {nuevoOpen && <InmuebleNuevoModal onClose={() => setNuevoOpen(false)} onSave={(d) => {
         setItems([{ ...d, id: Date.now(), st:'Disponible', partida:'11550511', proy:'Nápoles Condominio Club' }, ...items]);
       }}/>}
-      {editInmueble && <InmuebleNuevoModal initial={editInmueble} onClose={() => setEditInmueble(null)} onSave={(d) => {
-        setItems(items.map(i => i.id === editInmueble.id ? { ...i, ...d } : i));
-      }}/>}
-      {detalle && <InmuebleDetailModal inmueble={detalle} onClose={() => setDetalleId(null)} stMap={stMap} onEdit={() => { setEditInmueble(detalle); setDetalleId(null); }}/>}
+      {detalle && <InmuebleDetailModal inmueble={detalle} onClose={() => setDetalleId(null)} stMap={stMap}/>}
     </div>
   );
 };
 
-const InmuebleNuevoModal = ({ onClose, onSave, initial }) => {
-  const [f, setF] = React.useState(initial ? { code: initial.code, mz: initial.mz, area: initial.area, precio: initial.precio } : { code:'', mz:'', area:'', precio:'' });
+const InmuebleNuevoModal = ({ onClose, onSave }) => {
+  const [f, setF] = React.useState({ code:'', mz:'', area:'', precio:'' });
   const set = (k, v) => setF({ ...f, [k]: v });
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" onClick={(e)=>e.stopPropagation()}>
         <div className="card-head">
-          <div className="card-title hstack gap-8"><Icon name="building" size={16}/> {initial ? 'Editar inmueble' : 'Nuevo inmueble'}</div>
+          <div className="card-title hstack gap-8"><Icon name="building" size={16}/> Nuevo inmueble</div>
           <button className="icon-btn" onClick={onClose}><Icon name="x" size={14}/></button>
         </div>
         <div className="card-pad">
@@ -370,7 +365,7 @@ const InmuebleNuevoModal = ({ onClose, onSave, initial }) => {
   );
 };
 
-const InmuebleDetailModal = ({ inmueble, onClose, stMap, onEdit }) => (
+const InmuebleDetailModal = ({ inmueble, onClose, stMap }) => (
   <div className="modal-bg" onClick={onClose}>
     <div className="modal" style={{width:'min(560px, calc(100vw - 32px))'}} onClick={(e)=>e.stopPropagation()}>
       <div className="card-head">
@@ -391,7 +386,7 @@ const InmuebleDetailModal = ({ inmueble, onClose, stMap, onEdit }) => (
       </div>
       <div style={{padding:14, borderTop:'1px solid var(--border)', display:'flex', justifyContent:'flex-end', gap:8}}>
         <button className="btn" onClick={onClose}>Cerrar</button>
-        <button className="btn primary" onClick={onEdit}><Icon name="edit" size={13}/> Editar</button>
+        <button className="btn primary"><Icon name="edit" size={13}/> Editar</button>
       </div>
     </div>
   </div>
@@ -408,100 +403,39 @@ const ScreenAsesores = ({ onToast }) => {
   const puedeGestionar = window.can?.('gestionar_usuarios') ?? false;
 
   const [usuarios, setUsuarios] = React.useState(() => window.loadUsuarios?.() || []);
-  const [modal, setModal] = React.useState(null);
+  const [modal, setModal] = React.useState(null); // null | 'new' | usuario
   const [verClaves, setVerClaves] = React.useState(false);
-  const [loading, setLoading] = React.useState(false);
 
-  React.useEffect(() => {
-    if (!window.apiClient) return;
-    setLoading(true);
-    window.apiClient('/api/usuarios').then(data => {
-      if (!Array.isArray(data)) return;
-      const normalized = data.map(u => ({
-        id: u.id, empresaId: u.empresa_id, nombre: u.nombre,
-        usuario: u.username, rol: u.rol || 'Asesor',
-        activo: u.activo !== false, permisos: u.permisos || {},
-        _fromApi: true,
-      }));
-      setUsuarios(normalized);
-    }).catch(() => {}).finally(() => setLoading(false));
-  }, []);
-
-  const equipo = usuarios.filter(u => !u.empresaId || u.empresaId === empresa?.id);
+  const persist = (next) => { setUsuarios(next); window.saveUsuarios?.(next); };
+  const equipo = usuarios.filter(u => u.empresaId === empresa?.id);
   const activos = equipo.filter(u => u.activo).length;
 
-  const guardar = async (data) => {
+  const guardar = (data) => {
     const isNew = !data.id;
-    if (window.apiClient) {
-      try {
-        let result;
-        if (isNew) {
-          result = await window.apiClient('/api/usuarios', {
-            method: 'POST',
-            body: JSON.stringify({ nombre: data.nombre, username: data.usuario, password: data.clave, rol: data.rol, permisos: data.permisos }),
-          });
-        } else {
-          result = await window.apiClient(`/api/usuarios/${data.id}`, {
-            method: 'PUT',
-            body: JSON.stringify({ nombre: data.nombre, rol: data.rol, activo: data.activo, permisos: data.permisos }),
-          });
-          if (data.clave && data.clave !== '••••••••••') {
-            await window.apiClient(`/api/usuarios/${data.id}/password`, {
-              method: 'PUT',
-              body: JSON.stringify({ password: data.clave }),
-            }).catch(() => {});
-          }
-        }
-        if (result?.id) {
-          const reg = { id: result.id, empresaId: result.empresa_id, nombre: result.nombre, usuario: result.username, rol: result.rol, activo: result.activo !== false, permisos: result.permisos || {}, _fromApi: true };
-          setUsuarios(prev => isNew ? [...prev, reg] : prev.map(u => u.id === reg.id ? { ...u, ...reg } : u));
-          setModal(null);
-          window.dispatchEvent(new CustomEvent('mattika:permisos-cambiado'));
-          onToast?.(isNew ? `✓ Usuario "${data.usuario}" creado` : '✓ Usuario actualizado');
-          return;
-        }
-      } catch (err) {
-        onToast?.('Error: ' + (err.message || 'No se pudo guardar'));
-        return;
-      }
-    }
     const id = data.id || 'u-' + Math.random().toString(36).slice(2, 10);
     const reg = { ...data, id, empresaId: empresa.id, activo: data.activo !== false };
-    setUsuarios(prev => {
-      const next = isNew ? [...prev, reg] : prev.map(u => u.id === id ? { ...u, ...reg } : u);
-      window.saveUsuarios?.(next);
-      return next;
-    });
+    persist(isNew ? [...usuarios, reg] : usuarios.map(u => u.id === id ? { ...u, ...reg } : u));
     setModal(null);
+    // Si edité al usuario con el que estoy logueado, refresco la sesión activa
+    // (nombre/rol) para que el saludo, la barra lateral y los permisos cambien
+    // al instante — sin tener que cerrar e iniciar sesión de nuevo.
+    if (!isNew && id === sesion?.usuarioId) {
+      try {
+        const s = window.loadSesion?.();
+        if (s) window.saveSesion?.({ ...s, nombre: reg.nombre, rol: reg.rol });
+      } catch (e) {}
+    }
     window.dispatchEvent(new CustomEvent('mattika:permisos-cambiado'));
     onToast?.(isNew ? `✓ Usuario "${data.usuario}" creado` : '✓ Usuario actualizado');
   };
-
-  const toggle = async (u) => {
-    if (window.apiClient && u._fromApi) {
-      try {
-        await window.apiClient(`/api/usuarios/${u.id}`, { method: 'PUT', body: JSON.stringify({ activo: !u.activo }) });
-        setUsuarios(prev => prev.map(x => x.id === u.id ? { ...x, activo: !x.activo } : x));
-        onToast?.(u.activo ? 'Usuario desactivado' : 'Usuario reactivado');
-        return;
-      } catch (err) { onToast?.('Error al cambiar estado'); return; }
-    }
-    setUsuarios(prev => prev.map(x => x.id === u.id ? { ...x, activo: !x.activo } : x));
+  const toggle = (u) => {
+    persist(usuarios.map(x => x.id === u.id ? { ...x, activo: !x.activo } : x));
     onToast?.(u.activo ? 'Usuario desactivado' : 'Usuario reactivado');
   };
-
-  const eliminar = async (u) => {
+  const eliminar = (u) => {
     if (u.id === sesion?.usuarioId) { onToast?.('No puedes eliminar tu propio usuario'); return; }
     if (!window.confirm(`¿Eliminar al usuario "${u.usuario}" (${u.nombre})?`)) return;
-    if (window.apiClient && u._fromApi) {
-      try {
-        await window.apiClient(`/api/usuarios/${u.id}`, { method: 'DELETE' });
-        setUsuarios(prev => prev.filter(x => x.id !== u.id));
-        onToast?.('Usuario eliminado');
-        return;
-      } catch (err) { onToast?.('Error al eliminar: ' + err.message); return; }
-    }
-    setUsuarios(prev => prev.filter(x => x.id !== u.id));
+    persist(usuarios.filter(x => x.id !== u.id));
     onToast?.('Usuario eliminado');
   };
 
@@ -518,7 +452,9 @@ const ScreenAsesores = ({ onToast }) => {
           </div>
         </div>
         <div className="hstack gap-8">
-          {loading && <span className="muted text-xs">Cargando…</span>}
+          <button className="btn" onClick={() => setVerClaves(v => !v)}>
+            <Icon name="eye" size={14}/> {verClaves ? 'Ocultar claves' : 'Ver claves'}
+          </button>
           {puedeGestionar && (
             <button className="btn primary" onClick={() => setModal('new')}>
               <Icon name="plus" size={15}/> Nuevo usuario
@@ -540,7 +476,7 @@ const ScreenAsesores = ({ onToast }) => {
       <div className="card">
         <table className="tbl">
           <thead><tr>
-            <th>Usuario</th><th>Acceso</th><th>Rol</th><th>Estado</th><th></th>
+            <th>Usuario</th><th>Acceso</th><th>Rol</th><th>Clave</th><th>Estado</th><th></th>
           </tr></thead>
           <tbody>
             {equipo.map((u) => (
@@ -554,6 +490,7 @@ const ScreenAsesores = ({ onToast }) => {
                 </td>
                 <td className="mono"><b>{u.usuario}</b></td>
                 <td><span className="pill outline">{u.rol}</span></td>
+                <td className="mono muted">{verClaves ? u.clave : '•'.repeat(Math.min(u.clave?.length || 8, 10))}</td>
                 <td>{u.activo
                   ? <span className="pill success"><span className="dot"/>Activo</span>
                   : <span className="pill"><span className="dot"/>Inactivo</span>}</td>
@@ -590,11 +527,8 @@ const ScreenAsesores = ({ onToast }) => {
 
 const AsesorUserModal = ({ initial, empresaNombre, onClose, onSave }) => {
   const rolDefaults = window.permisosPorRol || ((r) => ({}));
-  const CLAVE_PLACEHOLDER = '••••••••••';
   const [f, setF] = React.useState(() => {
-    const base = initial
-      ? { ...initial, clave: initial.clave || CLAVE_PLACEHOLDER }
-      : { usuario:'', clave:'', nombre:'', rol:'Asesor', activo:true };
+    const base = initial || { usuario:'', clave:'', nombre:'', rol:'Asesor', activo:true };
     return { ...base, permisos: base.permisos ? { ...rolDefaults(base.rol), ...base.permisos } : rolDefaults(base.rol) };
   });
   const [showPass, setShowPass] = React.useState(!initial);
@@ -606,8 +540,7 @@ const AsesorUserModal = ({ initial, empresaNombre, onClose, onSave }) => {
   };
   const submit = (ev) => {
     ev.preventDefault();
-    if (!f.usuario?.trim()) return;
-    if (!initial && !f.clave?.trim()) return; // solo requerido al crear
+    if (!f.usuario.trim() || !f.clave.trim()) return;
     onSave({ ...f, ...(initial ? { id: initial.id } : {}) });
   };
   return (
@@ -716,18 +649,32 @@ const SettingsPerfil = ({ onToast }) => {
     return { nombre:'Mateo Vargas', email:'mateo@mattika.pe', telefono:'987 654 321', rol:'Administrador' };
   });
   const [dirty, setDirty] = React.useState(false);
+  const fotoRef = React.useRef(null);
   const upd = (k, v) => { setP({...p, [k]: v}); setDirty(true); };
   const save = () => { localStorage.setItem(STORAGE_KEY, JSON.stringify(p)); setDirty(false); onToast('Perfil guardado'); };
+  const onFoto = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { onToast('La imagen debe pesar menos de 2 MB'); return; }
+    const reader = new FileReader();
+    reader.onload = () => { setP(prev => ({ ...prev, foto: reader.result })); setDirty(true); };
+    reader.readAsDataURL(file);
+  };
 
   return (
     <div className="card card-pad">
       <div className="hstack gap-16 mb-16" style={{alignItems:'center'}}>
-        <div className="avatar lg" style={{width:64, height:64, fontSize:22}}>{p.nombre.split(' ').map(x=>x[0]).slice(0,2).join('')}</div>
+        <div className="avatar lg" style={{width:64, height:64, fontSize:22, overflow:'hidden', padding:0}}>
+          {p.foto
+            ? <img src={p.foto} alt="" style={{width:'100%', height:'100%', objectFit:'cover'}}/>
+            : p.nombre.split(' ').map(x=>x[0]).slice(0,2).join('')}
+        </div>
         <div className="flex1">
           <div className="card-title">{p.nombre}</div>
           <div className="muted text-sm">{p.rol} · {p.email}</div>
         </div>
-        <button className="btn" onClick={() => onToast('Carga de foto próximamente')}><Icon name="upload" size={13}/> Cambiar foto</button>
+        <input ref={fotoRef} type="file" accept="image/*" onChange={onFoto} style={{display:'none'}}/>
+        <button className="btn" onClick={() => fotoRef.current && fotoRef.current.click()}><Icon name="upload" size={13}/> {p.foto ? 'Cambiar foto' : 'Subir foto'}</button>
       </div>
       <div className="field-group cols-2">
         <div className="field"><label className="field-label">Nombre completo</label><input className="input" value={p.nombre} onChange={(e)=>upd('nombre', e.target.value)}/></div>

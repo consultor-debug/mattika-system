@@ -81,27 +81,12 @@ const ScreenCondiciones = ({ onGoto, onToast }) => {
   const [c, setC] = React.useState(() => loadCondiciones());
   const [dirty, setDirty] = React.useState(false);
 
-  React.useEffect(() => {
-    if (!window.apiClient) return;
-    window.apiClient('/api/condiciones').then(data => {
-      if (data && Object.keys(data).length > 0) {
-        const eid = _empresaId();
-        const defaults = CONDICIONES_POR_EMPRESA[eid] || CONDICIONES_DEFAULTS;
-        setC({ ...defaults, ...data });
-        saveCondiciones({ ...defaults, ...data });
-      }
-    }).catch(() => {});
-  }, []);
-
   const upd = (k, v) => { setC({ ...c, [k]: v }); setDirty(true); };
 
   const save = () => {
     saveCondiciones(c);
     setDirty(false);
     onToast?.('Condiciones comerciales guardadas');
-    if (window.apiClient) {
-      window.apiClient('/api/condiciones', { method: 'PUT', body: JSON.stringify(c) }).catch(() => {});
-    }
   };
 
   const restablecer = () => {

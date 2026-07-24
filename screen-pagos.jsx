@@ -39,7 +39,7 @@ const ScreenPagos = ({ initialFilter, onToast }) => {
   const build = React.useCallback(() => {
     const pe = window.loadPagoEstado?.(empresaId) || {};
     const real = window.deriveCuotasFromReservas?.(empresaId) || [];
-    const demo = (empresaId === 'lumina' ? CUOTAS_MOCK : []).map(c =>
+    const demo = (empresaId === 'lumina' && !window.esAsesorRestringido?.() ? CUOTAS_MOCK : []).map(c =>
       pe[c.id]
         ? { ...c, estado: 'pagada', pagadoEl: pe[c.id].fecha, operacion: pe[c.id].operacion, metodo: pe[c.id].metodo }
         : c
@@ -57,40 +57,6 @@ const ScreenPagos = ({ initialFilter, onToast }) => {
     window.addEventListener('focus', refresh);
     return () => window.removeEventListener('focus', refresh);
   }, [build]);
-
-  // Load cuotas from API (merges with local)
-  React.useEffect(() => {
-    if (!window.apiClient || !empresaId) return;
-    window.apiClient('/api/cuotas').then(data => {
-      if (!data?.length) return;
-      const hoy = new Date();
-      const apiCuotas = data.map(q => {
-        const vence = new Date(q.fecha_vencimiento);
-        const diasMora = q.estado === 'pendiente' && vence < hoy
-          ? Math.floor((hoy - vence) / 86400000) : 0;
-        return {
-          id: q.id,
-          code: q.contrato_codigo || q.contrato_id,
-          cliente: q.contrato_cliente || '',
-          dni: q.contrato_dni || '',
-          n: q.numero,
-          vence: q.fecha_vencimiento?.slice(0,10),
-          monto: parseFloat(q.monto),
-          estado: diasMora > 0 && q.estado === 'pendiente' ? 'vencida' : q.estado,
-          diasMora,
-          pagadoEl: q.fecha_pago?.slice(0,10),
-          operacion: q.num_operacion,
-          metodo: q.metodo_pago,
-          _apiId: q.id,
-        };
-      });
-      setCuotas(prev => {
-        const ids = new Set(apiCuotas.map(c => c.id));
-        const local = prev.filter(c => !ids.has(c.id));
-        return [...apiCuotas, ...local];
-      });
-    }).catch(() => {});
-  }, [empresaId]);
 
   const filtered = cuotas.filter(c => {
     if (filter !== 'todas' && c.estado !== filter) return false;
@@ -117,18 +83,6 @@ const ScreenPagos = ({ initialFilter, onToast }) => {
     window.savePagoEstado?.(empresaId, pe);
     setCuotas(build());
     setRegCuota(null);
-    // Sync payment to API
-    if (window.apiClient && cuota._apiId) {
-      window.apiClient(`/api/cuotas/${cuota._apiId}/pago`, {
-        method: 'POST',
-        body: JSON.stringify({
-          fecha: datos.fecha,
-          monto: datos.monto,
-          metodoPago: datos.metodo,
-          numOperacion: datos.operacion,
-        }),
-      }).catch(() => {});
-    }
     onToast(`✓ Pago registrado: ${cuota.cliente} · S/ ${fmtSoles(cuota.monto)}`);
   };
 
@@ -145,15 +99,11 @@ const ScreenPagos = ({ initialFilter, onToast }) => {
           </div>
         </div>
         <div className="hstack gap-8">
-          <button className="btn" onClick={() => {
-            const rows = [['Código','Cliente','DNI','Cuota N°','Vencimiento','Monto S/','Estado','Pagado el','Operación','Método']];
-            cuotas.forEach(c => rows.push([c.code, c.cliente, c.dni, c.n, c.vence, c.monto, c.estado, c.pagadoEl||'', c.operacion||'', c.metodo||'']));
-            const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-            const a = document.createElement('a');
-            a.href = 'data:text/csv;charset=utf-8,﻿' + encodeURIComponent(csv);
-            a.download = `cuotas_${new Date().toISOString().slice(0,10)}.csv`;
-            a.click();
-          }}><Icon name="download" size={14}/> Exportar</button>
+          <button className="btn" onClick={() => window.descargarCSV?.(
+            `pagos-${new Date().toISOString().slice(0,10)}`,
+            ['Código','Cliente','DNI','Cuota N°','Vence','Monto S/','Estado','Días mora','Lote','Proyecto'],
+            cuotas.map(c => [c.code, c.cliente, c.dni, c.n, c.vence, c.monto, c.estado, c.diasMora || 0, c.loteId, c.proyecto])
+          )}><Icon name="download" size={14}/> Exportar</button>
           {puedeRegistrar && (
             <button className="btn primary" onClick={() => { 
               const venc = cuotas.find(c => c.estado === 'vencida');

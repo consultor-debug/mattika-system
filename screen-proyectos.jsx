@@ -58,90 +58,45 @@ const ScreenProyectos = ({ onGoto, onToast }) => {
   const puedeEditarPlano = window.can?.('editar_plano') ?? false;
   const [empresas, setEmpresas] = React.useState(() => window.loadEmpresas?.() || []);
   const [ctx, setCtx] = window.useContexto?.(empresa?.id) || [{}, () => {}];
-  const [modal, setModal] = React.useState(null);
+  const [modal, setModal] = React.useState(null); // null | { tipo: 'proyecto-nuevo' } | { tipo: 'proyecto-editar', p } | { tipo: 'etapa-nuevo', proyectoId } | { tipo: 'etapa-editar', proyectoId, e }
   const [proyectoExpandido, setProyectoExpandido] = React.useState(null);
 
   const empresaActual = empresas.find(e => e.id === empresa?.id);
   const proyectos = empresaActual?.proyectos || [];
 
+  // Auto-expandir el proyecto activo en la primera carga
   React.useEffect(() => {
     if (!proyectoExpandido && ctx.proyectoId) setProyectoExpandido(ctx.proyectoId);
   }, [ctx.proyectoId]);
 
-  // Cargar proyectos desde API y sincronizar con el store local
-  React.useEffect(() => {
-    if (!window.apiClient || !empresa?.id) return;
-    window.apiClient('/api/proyectos').then(data => {
-      if (!Array.isArray(data) || !data.length) return;
-      const proyectosApi = data.map(p => ({
-        id: p.id, nombre: p.nombre, ubicacion: p.ubicacion || '',
-        descripcion: p.descripcion || '', estado: p.estado || 'preventa',
-        fechaInicio: p.fecha_inicio || '', fechaEntrega: p.fecha_entrega || '',
-        etapas: (p.etapas || []).map(e => ({
-          id: e.id, nombre: e.nombre, estado: e.estado || 'preventa',
-          lotes: e.lotes || 0, fechaInicio: e.fecha_inicio || '',
-          fechaEntrega: e.fecha_entrega || '',
-          planoAncho: null, planoAlto: null, planoFechaSubida: null, planoPesoKB: null,
-        })),
-      }));
-      setEmpresas(prev => {
-        const next = prev.map(emp => emp.id !== empresa.id ? emp : { ...emp, proyectos: proyectosApi });
-        window.saveEmpresas?.(next);
-        return next;
-      });
-    }).catch(() => {});
-  }, [empresa?.id]);
-
+  // Persistir cambios en empresas
   const persistEmpresas = (next) => {
     setEmpresas(next);
     window.saveEmpresas?.(next);
   };
 
-  const guardarProyecto = async (data) => {
+  const guardarProyecto = (data) => {
     const isNew = !data.id;
-    if (window.apiClient) {
-      try {
-        const payload = { nombre: data.nombre, ubicacion: data.ubicacion, descripcion: data.descripcion, estado: data.estado, fechaInicio: data.fechaInicio || null, fechaEntrega: data.fechaEntrega || null };
-        const result = isNew
-          ? await window.apiClient('/api/proyectos', { method: 'POST', body: JSON.stringify(payload) })
-          : await window.apiClient(`/api/proyectos/${data.id}`, { method: 'PUT', body: JSON.stringify(payload) });
-        if (result?.id) {
-          const proyecto = {
-            id: result.id, nombre: result.nombre, ubicacion: result.ubicacion || '',
-            descripcion: result.descripcion || '', estado: result.estado,
-            fechaInicio: result.fecha_inicio || '', fechaEntrega: result.fecha_entrega || '',
-            etapas: isNew ? [{ id:'e1', nombre:'Etapa 1', estado:'planificacion', lotes:0, fechaInicio:'', fechaEntrega:'' }] : proyectos.find(p => p.id === result.id)?.etapas || [],
-          };
-          persistEmpresas(empresas.map(e => e.id !== empresa.id ? e : {
-            ...e, proyectos: isNew ? [...(e.proyectos || []), proyecto] : (e.proyectos || []).map(p => p.id === result.id ? { ...p, ...proyecto } : p),
-          }));
-          setModal(null);
-          onToast?.(isNew ? '✓ Proyecto creado' : '✓ Proyecto actualizado');
-          if (isNew) setProyectoExpandido(result.id);
-          return;
-        }
-      } catch (err) { onToast?.('Error: ' + (err.message || 'No se pudo guardar')); return; }
-    }
-    const id = data.id || (data.nombre || 'proyecto').toLowerCase().replace(/[^a-z0-9]+/g,'-').slice(0,30) + '-' + Math.random().toString(36).slice(2,4);
+    const id = data.id || (data.nombre || 'proyecto').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,30) + '-' + Math.random().toString(36).slice(2,4);
     const proyecto = isNew
       ? { id, etapas: [{ id:'e1', nombre:'Etapa 1', estado:'planificacion', lotes:0, fechaInicio:'', fechaEntrega:'' }], ...data }
       : { ...proyectos.find(p => p.id === id), ...data, id };
-    persistEmpresas(empresas.map(e => e.id === empresa.id ? { ...e, proyectos: isNew ? [...(e.proyectos || []), proyecto] : (e.proyectos || []).map(p => p.id === id ? proyecto : p) } : e));
+    const next = empresas.map(e => e.id === empresa.id
+      ? { ...e, proyectos: isNew ? [...(e.proyectos || []), proyecto] : (e.proyectos || []).map(p => p.id === id ? proyecto : p) }
+      : e
+    );
+    persistEmpresas(next);
     setModal(null);
     onToast?.(isNew ? '✓ Proyecto creado' : '✓ Proyecto actualizado');
     if (isNew) setProyectoExpandido(id);
   };
 
-  const eliminarProyecto = async (p) => {
+  const eliminarProyecto = (p) => {
     if (proyectos.length === 1) { onToast?.('Debe haber al menos un proyecto'); return; }
     if (!window.confirm(`¿Eliminar el proyecto "${p.nombre}" y todas sus etapas?\n\nEsta acción no se puede deshacer.`)) return;
-    if (window.apiClient) {
-      try {
-        await window.apiClient(`/api/proyectos/${p.id}`, { method: 'DELETE' });
-      } catch (err) { onToast?.('Error al eliminar: ' + err.message); return; }
-    }
     const next = empresas.map(e => e.id === empresa.id ? { ...e, proyectos: e.proyectos.filter(x => x.id !== p.id) } : e);
     persistEmpresas(next);
+    // Si era el activo, cambiar al primero
     if (ctx.proyectoId === p.id) {
       const otro = empresaActual.proyectos.find(x => x.id !== p.id);
       if (otro) setCtx({ proyectoId: otro.id, etapaId: otro.etapas?.[0]?.id || null });
@@ -149,51 +104,31 @@ const ScreenProyectos = ({ onGoto, onToast }) => {
     onToast?.('Proyecto eliminado');
   };
 
-  const guardarEtapa = async (proyectoId, data) => {
+  const guardarEtapa = (proyectoId, data) => {
     const proyecto = proyectos.find(p => p.id === proyectoId);
     const isNew = !data.id;
-    if (window.apiClient) {
-      try {
-        const payload = { nombre: data.nombre, estado: data.estado, lotes: data.lotes || 0, fechaInicio: data.fechaInicio || null, fechaEntrega: data.fechaEntrega || null };
-        const result = isNew
-          ? await window.apiClient(`/api/proyectos/${proyectoId}/etapas`, { method: 'POST', body: JSON.stringify(payload) })
-          : await window.apiClient(`/api/proyectos/${proyectoId}/etapas/${data.id}`, { method: 'PUT', body: JSON.stringify(payload) });
-        if (result?.id) {
-          const etapa = { id: result.id, nombre: result.nombre, estado: result.estado, lotes: result.lotes || 0, fechaInicio: result.fecha_inicio || '', fechaEntrega: result.fecha_entrega || '' };
-          persistEmpresas(empresas.map(e => e.id !== empresa.id ? e : {
-            ...e, proyectos: e.proyectos.map(p => p.id !== proyectoId ? p : ({
-              ...p, etapas: isNew ? [...(p.etapas || []), etapa] : (p.etapas || []).map(x => x.id === etapa.id ? { ...x, ...etapa } : x),
-            })),
-          }));
-          setModal(null);
-          onToast?.(isNew ? '✓ Etapa creada' : '✓ Etapa actualizada');
-          return;
-        }
-      } catch (err) { onToast?.('Error: ' + err.message); return; }
-    }
     const id = data.id || 'e' + (Math.max(0, ...(proyecto.etapas || []).map(e => parseInt(e.id.replace(/\D/g,'') || '0', 10))) + 1);
     const etapa = isNew ? { id, ...data } : { ...proyecto.etapas.find(e => e.id === id), ...data, id };
-    persistEmpresas(empresas.map(e => e.id !== empresa.id ? e : {
-      ...e, proyectos: e.proyectos.map(p => p.id !== proyectoId ? p : ({
-        ...p, etapas: isNew ? [...(p.etapas || []), etapa] : (p.etapas || []).map(x => x.id === id ? etapa : x),
-      })),
-    }));
+    const next = empresas.map(e => e.id === empresa.id
+      ? { ...e, proyectos: e.proyectos.map(p => p.id !== proyectoId ? p : ({
+          ...p, etapas: isNew ? [...(p.etapas || []), etapa] : (p.etapas || []).map(x => x.id === id ? etapa : x)
+        }))}
+      : e
+    );
+    persistEmpresas(next);
     setModal(null);
     onToast?.(isNew ? '✓ Etapa creada' : '✓ Etapa actualizada');
   };
 
-  const eliminarEtapa = async (proyectoId, e) => {
+  const eliminarEtapa = (proyectoId, e) => {
     const proyecto = proyectos.find(p => p.id === proyectoId);
     if (proyecto.etapas.length === 1) { onToast?.('El proyecto debe tener al menos una etapa'); return; }
     if (!window.confirm(`¿Eliminar la etapa "${e.nombre}"?`)) return;
-    if (window.apiClient) {
-      try {
-        await window.apiClient(`/api/proyectos/${proyectoId}/etapas/${e.id}`, { method: 'DELETE' });
-      } catch (err) { onToast?.('Error al eliminar etapa: ' + err.message); return; }
-    }
-    persistEmpresas(empresas.map(emp => emp.id !== empresa.id ? emp : {
-      ...emp, proyectos: emp.proyectos.map(p => p.id !== proyectoId ? p : ({ ...p, etapas: p.etapas.filter(x => x.id !== e.id) })),
-    }));
+    const next = empresas.map(emp => emp.id === empresa.id
+      ? { ...emp, proyectos: emp.proyectos.map(p => p.id !== proyectoId ? p : ({ ...p, etapas: p.etapas.filter(x => x.id !== e.id) })) }
+      : emp
+    );
+    persistEmpresas(next);
     if (ctx.etapaId === e.id) {
       const otra = proyecto.etapas.find(x => x.id !== e.id);
       if (otra) setCtx({ ...ctx, etapaId: otra.id });

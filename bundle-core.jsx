@@ -24,6 +24,7 @@ const ICONS = {
   building: <><rect x="4" y="2" width="16" height="20" rx="1"/><line x1="9" y1="6" x2="9" y2="6"/><line x1="9" y1="10" x2="9" y2="10"/><line x1="9" y1="14" x2="9" y2="14"/><line x1="15" y1="6" x2="15" y2="6"/><line x1="15" y1="10" x2="15" y2="10"/><line x1="15" y1="14" x2="15" y2="14"/><line x1="10" y1="22" x2="10" y2="18"/><line x1="14" y1="22" x2="14" y2="18"/></>,
   calendar: <><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>,
   money: <><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></>,
+  chart: <><line x1="3" y1="21" x2="21" y2="21"/><rect x="5" y="11" width="3.5" height="7"/><rect x="10.5" y="6" width="3.5" height="12"/><rect x="16" y="14" width="3.5" height="4"/></>,
   receipt: <><path d="M4 2v20l3-2 3 2 3-2 3 2 3-2 3 2V2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></>,
   settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></>,
   plus: <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
@@ -54,6 +55,9 @@ const ICONS = {
   more: <><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></>,
   menu: <><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>,
   clock: <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>,
+  sliders: <><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></>,
+  lock: <><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>,
+  tag: <><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></>,
   alert: <><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>,
   mapPin: <><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></>,
   maximize: <><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></>,
@@ -176,7 +180,7 @@ const StatusPill = ({ status }) => {
     'firmado': { cls: 'success', label: 'Firmado' },
     'por-firmar': { cls: 'warn', label: 'Por firmar' },
     'borrador': { cls: 'outline', label: 'Borrador' },
-    'separacion': { cls: 'brand', label: 'Separación' },
+    'separacion': { cls: 'accent', label: 'Separación' },
     'vencido': { cls: 'danger', label: 'Vencido' },
     'pagado': { cls: 'success', label: 'Pagado' },
     'pendiente': { cls: 'warn', label: 'Pendiente' },
@@ -343,10 +347,10 @@ const CONTRATOS_RECIENTES = [
 ];
 
 const TITULARIDAD_OPTS = [
-  { id:'unico',             label:'Titular único',           desc:'Una sola persona natural compra el inmueble.', icon:'user' },
-  { id:'copropietarios',    label:'Copropietarios',          desc:'Dos o más personas adquieren en cuotas ideales.', icon:'users' },
-  { id:'conyuge',           label:'Sociedad conyugal',       desc:'Esposos bajo sociedad de gananciales.', icon:'heart2' },
-  { id:'separacion-bienes', label:'Separación de bienes',    desc:'Esposos con régimen patrimonial separado.', icon:'scale' },
+  { id:'unico',             label:'Titular único',           desc:'Una sola persona natural compra el inmueble.', icon:'user',   compradores:1, tag:'1 comprador' },
+  { id:'copropietarios',    label:'Copropietarios',          desc:'Dos o más personas adquieren en cuotas ideales.', icon:'users', compradores:2, tag:'2 compradores' },
+  { id:'conyuge',           label:'Sociedad conyugal',       desc:'Esposos bajo sociedad de gananciales.', icon:'heart2',  compradores:2, tag:'Cónyuges' },
+  { id:'separacion-bienes', label:'Separación de bienes',    desc:'Esposos con régimen patrimonial separado.', icon:'scale', compradores:2, tag:'Cónyuges' },
 ];
 
 const TIPO_DOC_OPTS = [
@@ -435,8 +439,10 @@ const ScreenContracts = ({ onOpenContract, onNew, initialFilterStatus }) => {
   const [filterTipo, setFilterTipo] = React.useState('all');
   const [filterStatus, setFilterStatus] = React.useState(initialFilterStatus || 'all');
   const [q, setQ] = React.useState('');
+  const [tick, setTick] = React.useState(0);
 
-  const filtered = CONTRATOS_RECIENTES.filter(c => {
+  const rows = (window.getContratosRows && window.getContratosRows()) || CONTRATOS_RECIENTES;
+  const filtered = rows.filter(c => {
     if (filterTipo !== 'all' && c.tipo !== filterTipo) return false;
     if (filterStatus !== 'all' && c.status !== filterStatus) return false;
     if (q && !`${c.cliente} ${c.code} ${c.proyecto}`.toLowerCase().includes(q.toLowerCase())) return false;
@@ -451,15 +457,11 @@ const ScreenContracts = ({ onOpenContract, onNew, initialFilterStatus }) => {
           <div className="page-sub">Todos los documentos generados por el equipo.</div>
         </div>
         <div className="hstack gap-8">
-          <button className="btn" onClick={() => {
-            const rows = [['Código','Cliente','DNI','Tipo','Proyecto','Inmueble','Asesor','Precio S/','Inicial S/','Estado','Fecha']];
-            filtered.forEach(c => rows.push([c.code, c.cliente, c.dni||'', c.tipo, c.proyecto, c.unidad||'', c.asesor||'', c.precio||'', c.inicial||'', c.status, c.fecha]));
-            const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-            const a = document.createElement('a');
-            a.href = 'data:text/csv;charset=utf-8,﻿' + encodeURIComponent(csv);
-            a.download = `contratos_${new Date().toISOString().slice(0,10)}.csv`;
-            a.click();
-          }}><Icon name="download" size={14}/> Exportar</button>
+          <button className="btn" onClick={() => window.descargarCSV?.(
+            `contratos-${new Date().toISOString().slice(0,10)}`,
+            ['Código','Cliente','DNI','Tipo','Inmueble','Proyecto','Asesor','Precio S/','Fecha','Estado'],
+            filtered.map(c => [c.code, c.cliente, c.dni, c.tipo, c.unidad, c.proyecto, c.asesor, c.precio, c.fecha, c.status])
+          )}><Icon name="download" size={14}/> Exportar</button>
           <button className="btn primary" onClick={() => onNew()}>
             <Icon name="plus" size={15}/> Nuevo documento
           </button>
@@ -527,7 +529,21 @@ const ScreenContracts = ({ onOpenContract, onNew, initialFilterStatus }) => {
                 <td className="num right strong">{fmtSoles(c.precio)}</td>
                 <td className="text-sm muted">{fmtDate(c.fecha)}</td>
                 <td><StatusPill status={c.status}/></td>
-                <td><Icon name="chevronR" size={14} style={{color:'var(--muted-2)'}}/></td>
+                <td onClick={(e) => e.stopPropagation()}>
+                  <span className="hstack gap-6" style={{justifyContent:'flex-end'}}>
+                    {c._venta && (
+                      <button className="icon-btn" title="Eliminar venta y liberar el lote"
+                        onClick={() => {
+                          if (!window.confirm(`¿Eliminar la venta ${c.code} de ${c.cliente}? El lote ligado volverá a estar disponible.`)) return;
+                          window.eliminarVenta?.(null, c._venta.id);
+                          setTick(t => t + 1);
+                        }}>
+                        <Icon name="trash" size={13}/>
+                      </button>
+                    )}
+                    <Icon name="chevronR" size={14} style={{color:'var(--muted-2)'}}/>
+                  </span>
+                </td>
               </tr>
             ))}
             {filtered.length === 0 && (
@@ -565,149 +581,9 @@ const Tabs = ({ value, onChange, options }) => (
 Object.assign(window, { ScreenContracts, Tabs });
 
 
-// screen-clients.jsx — Catálogo de clientes y plantillas (simple placeholders)
+// (Pantallas Clientes / Inmuebles / Plantillas eliminadas de aquí:
+//  las versiones reales viven en screen-extras.jsx, screen-lotes-admin.jsx
+//  y contract-template.jsx. Se quitaron los placeholders para evitar
+//  código y datos duplicados.)
 
-const ScreenClients = ({ onToast }) => {
-  const [clients, setClients] = React.useState([
-    { id:1, n:'Rosa Mercedes Pacheco Arias',   dni:'45872391', contratos: 1, ult:'2026-05-22' },
-    { id:2, n:'Javier Eduardo Cisneros Tello', dni:'09887452', contratos: 1, ult:'2026-05-21' },
-    { id:3, n:'Lucía Ramos Velarde',           dni:'47225910', contratos: 1, ult:'2026-05-19' },
-    { id:4, n:'Andrea Jiménez Soto',           dni:'42118094', contratos: 2, ult:'2026-05-18' },
-    { id:5, n:'Renzo Tapia Ferrer',            dni:'41005781', contratos: 1, ult:'2026-05-14' },
-    { id:6, n:'Patricia Olarte Núñez',         dni:'09553127', contratos: 1, ult:'2026-05-16' },
-  ]);
-  const [q, setQ] = React.useState('');
-  const filtered = clients.filter(c => !q || c.n.toLowerCase().includes(q.toLowerCase()) || c.dni.includes(q));
-
-  return (
-    <div className="page" data-screen-label="Clientes">
-      <div className="page-head">
-        <div>
-          <h1 className="page-title">Clientes</h1>
-          <div className="page-sub">Personas naturales registradas en el sistema.</div>
-        </div>
-        <button className="btn primary" onClick={() => onToast?.('Módulo de clientes en desarrollo · Próximamente')}>
-          <Icon name="plus" size={15}/> Nuevo cliente
-        </button>
-      </div>
-
-      <div className="card card-pad mb-12" style={{padding:'10px 14px'}}>
-        <div className="search" style={{margin:0}}>
-          <Icon name="search" size={14}/>
-          <input placeholder="Buscar por nombre o DNI..." value={q} onChange={e=>setQ(e.target.value)}/>
-        </div>
-      </div>
-
-      <div className="card">
-        <table className="tbl">
-          <thead><tr><th>Nombre</th><th>DNI</th><th className="right">Contratos</th><th>Última actividad</th><th></th></tr></thead>
-          <tbody>
-            {filtered.map(c => (
-              <tr key={c.id} style={{cursor:'pointer'}} onClick={() => onToast?.(`${c.n} · ${c.contratos} contrato${c.contratos!==1?'s':''}`)}>
-                <td className="hstack gap-10">
-                  <div className="avatar sm">{c.n.split(' ').map(p=>p[0]).slice(0,2).join('')}</div>
-                  <span className="strong">{c.n}</span>
-                </td>
-                <td className="num">{c.dni}</td>
-                <td className="right strong">{c.contratos}</td>
-                <td className="muted text-sm">{fmtDate(c.ult)}</td>
-                <td><Icon name="chevronR" size={14} style={{color:'var(--muted-2)'}}/></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-};
-
-const ScreenInmuebles = () => {
-  const items = [
-    { id:1, code:'Lote 14 · Mz. C',  proy:'Residencial Las Lomas',  area:180, precio:248500, st:'Reservado' },
-    { id:2, code:'Lote 07 · Mz. A',  proy:'Residencial Las Lomas',  area:160, precio:198000, st:'Vendido' },
-    { id:3, code:'Dpto. 802',        proy:'Torre Alameda',           area:112, precio:412000, st:'Reservado' },
-    { id:4, code:'Dpto. 503',        proy:'Edificio Pinares',        area:138, precio:528000, st:'Vendido' },
-    { id:5, code:'Dpto. 504',        proy:'Torre Alameda',           area:88,  precio:320000, st:'Disponible' },
-    { id:6, code:'Casa 22',          proy:'Condominio Vista Mar',    area:240, precio:365000, st:'Vendido' },
-    { id:7, code:'Lote 22 · Mz. B',  proy:'Residencial Las Lomas',   area:180, precio:235000, st:'Disponible' },
-    { id:8, code:'Dpto. 1001',       proy:'Torre Alameda',           area:140, precio:485000, st:'Disponible' },
-  ];
-  const stMap = { 'Disponible':'success', 'Reservado':'warn', 'Vendido':'outline' };
-  return (
-    <div className="page" data-screen-label="Inmuebles">
-      <div className="page-head">
-        <div>
-          <h1 className="page-title">Inmuebles</h1>
-          <div className="page-sub">Inventario por proyecto.</div>
-        </div>
-        <button className="btn primary"><Icon name="plus" size={15}/> Nuevo inmueble</button>
-      </div>
-      <div className="field-group cols-4">
-        {items.map(i => (
-          <div key={i.id} className="card card-pad" style={{cursor:'default'}}>
-            <div className="hstack between mb-8">
-              <div className="qa-ic" style={{width:32, height:32}}><Icon name="building" size={16}/></div>
-              <span className={`pill ${stMap[i.st]}`}>{i.st}</span>
-            </div>
-            <div className="serif" style={{fontSize:18, fontWeight:500, color:'var(--ink)', letterSpacing:'-.01em'}}>{i.code}</div>
-            <div className="muted text-sm">{i.proy}</div>
-            <div className="divider"/>
-            <div className="hstack between">
-              <div>
-                <div className="muted text-xs">Área</div>
-                <div className="mono fw-600">{i.area} m²</div>
-              </div>
-              <div className="right">
-                <div className="muted text-xs">Precio</div>
-                <div className="mono fw-600">S/ {fmtInt(i.precio)}</div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const ScreenTemplates = () => {
-  const tpls = [
-    { n:'Nápoles · Compraventa de Bien Futuro · v3.2', tipo:'compraventa', desc:'Plantilla notarial Terrenopolis con cronograma de pagos personalizado.', uso: 184, fecha:'2026-04-12', activa: true },
-    { n:'Acta de Separación · v1.4',  tipo:'separacion', desc:'Reserva de inmueble por 30 días con arras de retracto.', uso: 56, fecha:'2026-03-08', activa: true },
-    { n:'Cronograma · v2.0',          tipo:'cronograma', desc:'Cronograma independiente para reemitir.', uso: 240, fecha:'2026-04-12', activa: true },
-    { n:'Desistimiento · v1.2',       tipo:'desistimiento', desc:'Cancelación con devolución parcial al comprador.', uso: 12, fecha:'2026-02-22', activa: true },
-  ];
-  return (
-    <div className="page" data-screen-label="Plantillas">
-      <div className="page-head">
-        <div>
-          <h1 className="page-title">Plantillas</h1>
-          <div className="page-sub">Documentos base que se rellenan automáticamente con los datos del formulario.</div>
-        </div>
-        <button className="btn primary"><Icon name="plus" size={15}/> Nueva plantilla</button>
-      </div>
-      <div className="vstack gap-12">
-        {tpls.map((t, i) => (
-          <div key={i} className="card card-pad hstack gap-16">
-            <div className="qa-ic" style={{width:46, height:46}}><Icon name="template" size={20}/></div>
-            <div className="flex1">
-              <div className="hstack gap-8">
-                <span className="serif" style={{fontSize:17, fontWeight:500}}>{t.n}</span>
-                {t.activa && <span className="pill success"><span className="dot"/>Activa</span>}
-              </div>
-              <div className="muted text-sm">{t.desc}</div>
-              <div className="hstack gap-12 mt-8">
-                <span className="muted text-xs"><Icon name="doc" size={11} style={{verticalAlign:-1, marginRight:4}}/>{t.uso} usos</span>
-                <span className="muted text-xs"><Icon name="clock" size={11} style={{verticalAlign:-1, marginRight:4}}/>Última edición {fmtDate(t.fecha)}</span>
-              </div>
-            </div>
-            <button className="btn"><Icon name="edit" size={13}/> Editar</button>
-            <button className="btn ghost"><Icon name="copy" size={13}/></button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-Object.assign(window, { ScreenClients, ScreenInmuebles, ScreenTemplates });
 
